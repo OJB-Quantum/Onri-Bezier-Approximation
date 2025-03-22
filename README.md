@@ -1,7 +1,7 @@
 # Bezier-Approximation-Plus
 Applied ideas on using Bezier curves &amp; hybrid tetrations to approximate &amp; fit curves in data. Authored by Onri Jay Benally.
 
-Bezier curves, being the useful geometric tools that they are, can be described by a Bernstein basis polynomial. They can be modified to follow objects that bend using hidden control handles and anchor points placed on an existing curve of interest. With that in mind, I thought of the introducing the polynomial for the Bezier curve with a tetration to form a hybrid approach which may compensate for very sharp and large changes in curve data as well. Some interesting results are provided in this repository. 
+Bezier curves, being the useful geometric tools that they are, can be described by a Bernstein basis polynomial. They can be modified to follow objects that bend using hidden control handles and anchor points placed on an existing curve of interest. With that in mind, I thought of the introducing the polynomial for the Bezier curve with a tetration to form a hybrid approach which may compensate for very sharp and large changes in curve data as well. Some interesting results are provided in this repository. Check files for the code provided in a Google Colab notebook.
 
 ![ezgif-418d14bce1cd40](https://github.com/user-attachments/assets/dd806438-3021-4664-bea7-432d8a6186e3)
 
@@ -73,4 +73,12 @@ Bezier curves, being the useful geometric tools that they are, can be described 
 | **4. Logarithmic Transformation (Taming Tetration Growth)** | To prevent tetration from **dominating** a polynomial, we introduce logarithmic damping: <br />$H(x) = \sum_{n=0}^{\infty} a_n x^n + d \log({}^m x)$<br />**Controls tetration's rapid growth by applying a logarithm.** |
 | **Challenges of Hybridizing a Polynomial with Tetration** | 1. **Growth Rate Disparity**: Tetration grows **much** faster than polynomial terms. Scaling is necessary. <br />2. **Analytic Continuation Issues**: Tetration is **not always well-defined** for non-integer heights, requiring **super-exponential extensions**. <br />3. **Computational Stability**: Tetration grows **hyper-exponentially**, which can cause **numerical instability**. |
 | **Conclusion** | A **hybrid polynomial-tetration function** is possible with different formulations depending on the desired properties: <br />- **Controlled growth**: Use logarithmic damping or power series approximations.<br />- **Ultra-fast growth**: Use direct summation or embed tetration inside a polynomial. |
+
+---
+
+### Examples of the Hybrid Bezier Approximation Applied to RF/MW Resonance Peaks
+
+![Untitled](https://github.com/user-attachments/assets/fa2c1a58-0822-46c7-af1d-75b1f3b6f0e1)
+
+![Untitled-1](https://github.com/user-attachments/assets/c368ccfa-ccd6-48c4-9565-476b98d4f9c2)
 
