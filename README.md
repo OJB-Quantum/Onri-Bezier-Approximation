@@ -3,6 +3,8 @@ Applied ideas on using Bezier curves &amp; hybrid tetrations to approximate &amp
 
 Bezier curves, being the useful geometric tools that they are, can be described by a Bernstein basis polynomial. They can be modified to follow objects that bend using hidden control handles and anchor points placed on an existing curve of interest. With that in mind, I thought of the introducing the polynomial for the Bezier curve with a tetration to form a hybrid approach which may compensate for very sharp and large changes in curve data as well. Some interesting results are provided in this repository. Check files for the code provided in a Google Colab notebook.
 
+### Click here to render the notebooks in the browser: [![nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.org/github/OJB-Quantum/Bezier-Approximation-Plus/tree/main/)
+
 ![ezgif-418d14bce1cd40](https://github.com/user-attachments/assets/dd806438-3021-4664-bea7-432d8a6186e3)
 
 
