@@ -80,5 +80,6 @@ Bezier curves, being the useful geometric tools that they are, can be described 
 
 ![Untitled](https://github.com/user-attachments/assets/fa2c1a58-0822-46c7-af1d-75b1f3b6f0e1)
 
-![Untitled-1](https://github.com/user-attachments/assets/c368ccfa-ccd6-48c4-9565-476b98d4f9c2)
+![Untitled](https://github.com/user-attachments/assets/9536c52f-3879-444d-b528-ae0a6e551270)
+
 
