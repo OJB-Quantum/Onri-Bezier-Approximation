@@ -1,7 +1,7 @@
 # Bezier-Approximation-Plus
 Applied ideas on using Bezier curves &amp; hybrid tetrations to approximate &amp; fit curves in data. Authored by Onri Jay Benally.
 
-Bezier curves, being the useful geometric tools that they are, can be described by a Bernstein basis polynomial. Additionally, I thought of the introducing the polynomial for the Bezier curve with tetration to form a hybrid approach to compensate for very sharp and large changes in curve data as well. Some interesting results are provided in this repository. 
+Bezier curves, being the useful geometric tools that they are, can be described by a Bernstein basis polynomial. They can be modified to follow objects that bend using hidden control handles and anchor points placed on an existing curve of interest. With that in mind, I thought of the introducing the polynomial for the Bezier curve with a tetration to form a hybrid approach which may compensate for very sharp and large changes in curve data as well. Some interesting results are provided in this repository. 
 
 ![ezgif-418d14bce1cd40](https://github.com/user-attachments/assets/dd806438-3021-4664-bea7-432d8a6186e3)
 
