@@ -101,9 +101,7 @@ Because it treats every target merely as a *curve in a metric space*, OBA never 
 * **Unit agnosticism** –  All coordinates enter after non‑dimensionalisation $x\mapsto(x-x_0)/\Delta x$.
 * **Domain‑agnostic handles** –  Control‑point density derives from a scale‑free curvature metric
 
-  $$
-  \kappa(t)=\frac{|B'(t)\times B''(t)|}{|B'(t)|^{3}},
-  $$
+  $$ \kappa(t)=\frac{|B'(t)\times B''(t)|}{|B'(t)|^{3}}, $$
 
   so identical logic handles cosmological red‑shift curves or nanosecond pulse edges.
 * **Data‑source agnosticism** –  Anchor points arise from either analytic formulas, PDE solvers, or raw lab CSV files.
