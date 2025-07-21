@@ -96,7 +96,7 @@ Note that integrating a tetration into a polynomial can create extremely large v
 
 ### How *agnostic* the OBA framework already is
 
-Because it treats every target merely as a *curve in a metric space*, OBA never asks *what* the ordinate represents—charge, entropy, or fluid height—only *where* the sampled points lie.
+Because it treats every target merely as a *curve in a metric space*, OBA never asks *what* the ordinate represents (charge, entropy, or fluid height), only *where* the sampled points lie.
 
 * **Unit agnosticism** –  All coordinates enter after non‑dimensionalisation $x\mapsto(x-x_0)/\Delta x$.
 * **Domain‑agnostic handles** –  Control‑point density derives from a scale‑free curvature metric
@@ -111,7 +111,7 @@ Because it treats every target merely as a *curve in a metric space*, OBA never 
 ### Steps to rewrite OBA into an *even more agnostic, adaptive* description
 
 1. **Embed dimensionless sampling** –  Replace absolute $t$ with a cumulative arc‑length parameter $s\in[0,1]$; now geometry, not original grid, controls spacing.
-2. **Abstract the growth kernel** –  Generalise the special tetration to a placeholder $\mathcal{G}(t;\theta)$ satisfying
+2. **Abstract the growth kernel** –  Generalize the special tetration to a placeholder $\mathcal{G}(t;\theta)$ satisfying
 
    $$
    \lim_{\theta\to0}\mathcal{G}=0,\qquad
