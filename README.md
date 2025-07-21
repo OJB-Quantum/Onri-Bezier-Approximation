@@ -113,10 +113,8 @@ Because it treats every target merely as a *curve in a metric space*, OBA never 
 1. **Embed dimensionless sampling** –  Replace absolute $t$ with a cumulative arc‑length parameter $s\in[0,1]$; now geometry, not original grid, controls spacing.
 2. **Abstract the growth kernel** –  Generalize the special tetration to a placeholder $\mathcal{G}(t;\theta)$ satisfying
 
-   $$
-   \lim_{\theta\to0}\mathcal{G}=0,\qquad
-   \partial \mathcal{G}/\partial\theta>0,
-   $$
+   $$\lim_{\theta\to0}\mathcal{G}=0,\qquad
+   \partial \mathcal{G}/\partial\theta>0,$$
 
    so any future super‑exponential (e.g., pentation) can drop in without code rewrites.
 3. **Plugin constraint dictionaries** –  Store physics‑specific boundary or symmetry conditions in external YAML or JSON; the core solver only parses generic “pin derivative to zero,” “force periodicity,” etc.
