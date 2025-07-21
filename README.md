@@ -140,7 +140,7 @@ where lists $\{c_j,\mathcal{G}_j,\phi_j,\theta_j\}$ are supplied at run‑time.
 
 ---
 
-### Mind‑map of connections
+### Mind‑map of connections
 
 ```
 OBA
