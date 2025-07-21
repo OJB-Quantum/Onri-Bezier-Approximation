@@ -183,9 +183,460 @@ OBA
 
 ### Examples of Onri's Bezier Approximation Techniques Applied to RF/MW Resonance Peaks
 
+```
+import numpy as np
+import matplotlib.pyplot as plt
+import skrf as rf
+import math
+from scipy.interpolate import interp1d
+
+# Use a preset style from scikit‑rf
+rf.stylely()
+
+# ---------------------------
+# Build the RF Resonator
+# ---------------------------
+C = 1e-6  # Capacitance in Farads
+L = 1e-9  # Inductance in Henry
+R = 30    # Resistance in Ohm
+Z0 = 50   # Characteristic impedance in Ohm
+
+freq = rf.Frequency(5, 5.2, npoints=501, unit='MHz')
+media = rf.DefinedGammaZ0(frequency=freq, z0=Z0)
+rng = np.random.default_rng()
+random_d = rng.uniform(-np.pi, np.pi)  # random line length for demo
+
+resonator = (media.line(d=random_d, unit='rad')
+             ** media.shunt_inductor(L) ** media.shunt_capacitor(C)
+             ** media.shunt(media.resistor(R)**media.short()) ** media.open())
+
+# Extract frequency (MHz) and S_db (dB)
+f = freq.f
+s_db = resonator.s_db.flatten()
+
+# Normalize frequency to [0, 1] for processing
+x_norm = (f - f.min())/(f.max()-f.min())
+
+# ---------------------------
+# Anchor Selection & Clustering
+# ---------------------------
+def get_clustered_anchor_indices(x, y, num_uniform=10, threshold_percentile=50):
+    """
+    Select uniformly spaced anchor indices combined with extra indices
+    in regions where the absolute second derivative (approximate curvature)
+    exceeds the given percentile threshold.
+    """
+    uniform_indices = np.linspace(0, len(x)-1, num=num_uniform, dtype=int)
+    first_deriv = np.gradient(y, x)
+    second_deriv = np.gradient(first_deriv, x)
+    curvature = np.abs(second_deriv)
+    threshold = np.percentile(curvature, threshold_percentile)
+    extra_indices = np.where(curvature > threshold)[0]
+    all_indices = np.sort(np.unique(np.concatenate((uniform_indices, extra_indices))))
+    return all_indices
+
+anchor_indices = get_clustered_anchor_indices(x_norm, s_db, num_uniform=10, threshold_percentile=50)
+anchors_x = x_norm[anchor_indices]
+anchors_y = s_db[anchor_indices]
+
+# ---------------------------
+# Compute Derivatives at Anchors
+# ---------------------------
+def compute_derivatives(x, y):
+    """
+    Estimate slopes at anchor points using finite differences.
+    """
+    m = np.zeros_like(y)
+    n = len(y)
+    for i in range(n):
+        if i == 0:
+            m[i] = (y[i+1] - y[i]) / (x[i+1] - x[i])
+        elif i == n - 1:
+            m[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
+        else:
+            m[i] = (y[i+1] - y[i-1]) / (x[i+1] - x[i-1])
+    return m
+
+anchor_slopes = compute_derivatives(anchors_x, anchors_y)
+
+# ---------------------------
+# Composite Cubic Bezier from Anchors
+# ---------------------------
+def bezier_from_anchors(x, y, m, num_seg=50):
+    """
+    Construct a composite Bezier curve from anchor points.
+    Each segment is defined as a cubic Bezier curve determined by endpoints
+    and estimated slopes (using a Hermite formulation).
+    Returns the composite curve and the control points for each segment.
+    """
+    curve_x = []
+    curve_y = []
+    control_points_list = []
+    n = len(x)
+    for i in range(n - 1):
+        x0, y0, m0 = x[i], y[i], m[i]
+        x1, y1, m1 = x[i+1], y[i+1], m[i+1]
+        dx = x1 - x0
+        P0 = np.array([x0, y0])
+        P3 = np.array([x1, y1])
+        P1 = np.array([x0 + dx/3.0, y0 + (dx/3.0)*m0])
+        P2 = np.array([x1 - dx/3.0, y1 - (dx/3.0)*m1])
+        control_points_list.append(np.array([P0, P1, P2, P3]))
+        t = np.linspace(0, 1, num_seg)
+        segment = (np.outer((1-t)**3, P0) + np.outer(3*(1-t)**2*t, P1) +
+                   np.outer(3*(1-t)*t**2, P2) + np.outer(t**3, P3))
+        if i > 0:
+            segment = segment[1:]  # avoid duplicating endpoints
+        curve_x.extend(segment[:,0])
+        curve_y.extend(segment[:,1])
+    return np.array(curve_x), np.array(curve_y), control_points_list
+
+bezier_x_norm, bezier_y, bezier_cps = bezier_from_anchors(anchors_x, anchors_y, anchor_slopes, num_seg=50)
+# Map normalized x back to original frequency scale
+bezier_x = bezier_x_norm * (f.max() - f.min()) + f.min()
+
+# ---------------------------
+# Create Interpolation for the Original RF Resonance
+# ---------------------------
+orig_interp = interp1d(x_norm, s_db, kind='linear', fill_value="extrapolate")
+
+# ---------------------------
+# Tetration & Hybrid Modifications (Reference: Original RF Resonance)
+# ---------------------------
+def tetration(x, m):
+    """
+    Compute iterated exponentiation (tetration) of x for m iterations.
+    This is a naive implementation.
+    """
+    result = np.copy(x)
+    for _ in range(m - 1):
+        result = np.power(x, result)
+    return result
+
+def tetration_series(x, m, n_terms=5):
+    """
+    Approximate tetration with a truncated series expansion.
+    """
+    s = np.zeros_like(x)
+    for k in range(1, n_terms + 1):
+        s += x**k / math.factorial(k)
+    return s
+
+# Parameters for tetration modifications
+m_val = 3    # Number of tetration iterations
+c_val = 0.1  # Scaling coefficient for direct summation and series expansion
+d_val = 0.1  # Scaling coefficient for logarithmic transformation
+
+# Hybrid functions using the original RF resonance as the reference.
+H_direct    = orig_interp(x_norm) + c_val * tetration(x_norm, m_val)
+H_recursive = orig_interp(tetration(x_norm, m_val))
+H_series    = orig_interp(x_norm) + c_val * tetration_series(x_norm, m_val)
+H_log       = orig_interp(x_norm) + d_val * np.log(tetration(x_norm, m_val) + 1e-12)
+
+# ---------------------------
+# Plotting the Results
+# ---------------------------
+plt.figure(figsize=(14, 10))
+
+# (1) Original RF Resonance with Clustered Anchors
+plt.subplot(3, 2, 1)
+plt.plot(f, s_db, 'k-', label='RF Resonance 
+')
+plt.scatter(f[anchor_indices], s_db[anchor_indices], color='red', label='Anchors')
+plt.xlabel('Frequency (MHz)')
+plt.ylabel('
+ (dB)')
+plt.title('RF Resonance with Clustered Anchors')
+plt.legend()
+
+# (2) Composite Bezier Curve Approximation
+plt.subplot(3, 2, 2)
+plt.plot(bezier_x, bezier_y, 'g-', linewidth=2, label='Composite Bezier')
+plt.xlabel('Frequency (MHz)')
+plt.ylabel('
+ (dB)')
+plt.title('Bezier Curve Approximation')
+plt.legend()
+
+# (3) Direct Summation Hybrid
+plt.subplot(3, 2, 3)
+plt.plot(f, s_db, 'k-', label='RF Resonance 
+')
+plt.plot(f, H_direct, 'orange', label='Direct Summation Hybrid')
+plt.xlabel('Frequency (MHz)')
+plt.ylabel('H(x)')
+plt.title('Direct Summation Hybrid')
+plt.legend()
+
+# (4) Recursive Hybridization
+plt.subplot(3, 2, 4)
+plt.plot(f, s_db, 'k-', label='RF Resonance 
+')
+plt.plot(f, H_recursive, 'purple', label='Recursive Hybridization')
+plt.xlabel('Frequency (MHz)')
+plt.ylabel('H(x)')
+plt.title('Recursive Hybridization')
+plt.legend()
+
+# (5) Series Expansion Hybrid
+plt.subplot(3, 2, 5)
+plt.plot(f, s_db, 'k-', label='RF Resonance 
+')
+plt.plot(f, H_series, 'brown', label='Series Expansion Hybrid')
+plt.xlabel('Frequency (MHz)')
+plt.ylabel('H(x)')
+plt.title('Series Expansion Hybrid')
+plt.legend()
+
+# (6) Logarithmic Transformation Hybrid
+plt.subplot(3, 2, 6)
+plt.plot(f, s_db, 'k-', label='RF Resonance 
+')
+plt.plot(f, H_log, 'magenta', label='Logarithmic Transformation Hybrid')
+plt.xlabel('Frequency (MHz)')
+plt.ylabel('H(x)')
+plt.title('Logarithmic Transformation Hybrid')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+```
+
 ![Untitled](https://github.com/user-attachments/assets/fa2c1a58-0822-46c7-af1d-75b1f3b6f0e1)
 
+```
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+from scipy.interpolate import interp1d
+
+# ----------------------------
+# 1. Define the Computed RF Curve with a Narrow Base and Peak Height 10
+# ----------------------------
+def rf_curve_narrow_base(x, A=10, x0=1, width=0.005):
+    """
+    Lorentzian function representing an RF resonance peak with a narrow base.
+      y_RF(x) = A / [1 + ((x - x0)/width)**2]
+    """
+    return A / (1 + ((x - x0)/width)**2)
+
+# Generate x values over a range 10 units wide with the resonance peak at x0 = 1.
+x = np.linspace(-4, 6, 501)
+y = rf_curve_narrow_base(x)  # A=10, width=0.005
+
+# Normalize x to the range [0, 1] for anchor selection and interpolation.
+x_norm = (x - x.min()) / (x.max() - x.min())
+
+# ----------------------------
+# 2. Anchor Selection & Clustering Based on Curvature
+# ----------------------------
+def get_clustered_anchor_indices(x, y, num_uniform=10, threshold_percentile=50):
+    """
+    Select uniformly spaced anchor indices plus extra indices
+    where absolute second derivative > the given percentile threshold.
+    """
+    uniform_indices = np.linspace(0, len(x) - 1, num=num_uniform, dtype=int)
+    first_deriv = np.gradient(y, x)
+    second_deriv = np.gradient(first_deriv, x)
+    curvature = np.abs(second_deriv)
+    threshold = np.percentile(curvature, threshold_percentile)
+    extra_indices = np.where(curvature > threshold)[0]
+    all_indices = np.sort(np.unique(np.concatenate((uniform_indices, extra_indices))))
+    return all_indices
+
+anchor_indices = get_clustered_anchor_indices(x_norm, y, num_uniform=10, threshold_percentile=50)
+anchors_x = x_norm[anchor_indices]
+anchors_y = y[anchor_indices]
+
+# ----------------------------
+# 3. Compute Derivatives at Anchor Points
+# ----------------------------
+def compute_derivatives(x, y):
+    """
+    Estimate slopes at anchor points using finite differences.
+    """
+    m = np.zeros_like(y)
+    n = len(y)
+    for i in range(n):
+        if i == 0:
+            m[i] = (y[i+1] - y[i]) / (x[i+1] - x[i])
+        elif i == n - 1:
+            m[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
+        else:
+            m[i] = (y[i+1] - y[i-1]) / (x[i+1] - x[i-1])
+    return m
+
+anchor_slopes = compute_derivatives(anchors_x, anchors_y)
+
+# ----------------------------
+# 4. Composite Cubic Bézier Curve from Anchors (with a tension parameter)
+# ----------------------------
+def bezier_from_anchors(x, y, m, num_seg=50, tension=0.5):
+    """
+    Construct a composite cubic Bézier curve from anchor points.
+
+    Each segment is determined by:
+      - endpoints  (P0, P3)
+      - slope at P0 (m0) and slope at P3 (m1)
+      - tension factor: 0 < tension <= 1
+        * tension < 1 shortens the handles, producing a 'tighter' curve.
+        * tension=1 corresponds to the traditional Hermite approach with dx/3.
+
+    Returns:
+      curve_x, curve_y = composite curve arrays
+      control_points_list = list of [P0, P1, P2, P3] for each segment
+    """
+    curve_x = []
+    curve_y = []
+    control_points_list = []
+
+    n = len(x)
+    for i in range(n - 1):
+        x0, y0, m0 = x[i],   y[i],   m[i]
+        x1, y1, m1 = x[i+1], y[i+1], m[i+1]
+
+        dx = x1 - x0
+
+        # We scale (dx/3) by the tension factor
+        handle_len = tension * (dx / 3.0)
+
+        # Control points P1, P2 use these "Hermite-like" formulas:
+        P0 = np.array([x0, y0])
+        P3 = np.array([x1, y1])
+        P1 = np.array([x0 + handle_len, y0 + handle_len * m0])
+        P2 = np.array([x1 - handle_len, y1 - handle_len * m1])
+
+        control_points_list.append(np.array([P0, P1, P2, P3]))
+
+        # Evaluate this segment of the Bézier curve
+        tvals = np.linspace(0, 1, num_seg)
+        segment = ((1 - tvals)**3)[:,None]*P0 \
+                  + (3*(1 - tvals)**2 * tvals)[:,None]*P1 \
+                  + (3*(1 - tvals) * tvals**2)[:,None]*P2 \
+                  + (tvals**3)[:,None]*P3
+
+        # Avoid duplicating boundary points
+        if i > 0:
+            segment = segment[1:]
+
+        curve_x.extend(segment[:,0])
+        curve_y.extend(segment[:,1])
+
+    return np.array(curve_x), np.array(curve_y), control_points_list
+
+# Adjust tension here: try 0.3 .. 1.0
+bezier_x_norm, bezier_y, bezier_cps = bezier_from_anchors(anchors_x, anchors_y,
+                                                          anchor_slopes,
+                                                          num_seg=50,
+                                                          tension=0.5)
+
+# Map normalized x back to the original scale.
+bezier_x = bezier_x_norm * (x.max() - x.min()) + x.min()
+
+# ----------------------------
+# 5. Create Interpolation for the Original RF Resonance
+# ----------------------------
+orig_interp = interp1d(x_norm, y, kind='linear', fill_value="extrapolate")
+
+# ----------------------------
+# 6. Tetration & Hybrid Modifications (Using the Original RF Resonance as Reference)
+# ----------------------------
+def tetration(x, m):
+    """
+    Compute iterated exponentiation (tetration) of x for m iterations.
+    """
+    result = np.copy(x)
+    for _ in range(m - 1):
+        result = np.power(x, result)
+    return result
+
+def tetration_series(x, m, n_terms=5):
+    """
+    Approximate tetration with a truncated series expansion.
+    """
+    s = np.zeros_like(x)
+    for k in range(1, n_terms + 1):
+        s += x**k / math.factorial(k)
+    return s
+
+# Parameters for the hybrid modifications
+m_val = 3    # Tetration iterations
+c_val = 0.1  # Scaling coefficient for direct summation and series expansion
+d_val = 0.1  # Scaling coefficient for logarithmic transformation
+epsilon = 1e-12
+
+# Hybrid functions
+H_direct    = orig_interp(x_norm) + c_val * tetration(x_norm, m_val)
+H_recursive = orig_interp(tetration(x_norm, m_val))
+H_series    = orig_interp(x_norm) + c_val * tetration_series(x_norm, m_val)
+H_log       = orig_interp(x_norm) + d_val * np.log(tetration(x_norm, m_val) + epsilon)
+
+# ----------------------------
+# 7. Plotting the Results
+# ----------------------------
+plt.figure(figsize=(14, 10))
+
+# (1) Original RF Resonance with Clustered Anchors
+plt.subplot(3, 2, 1)
+plt.plot(x, y, 'k-', label='RF Resonance (A=10)')
+plt.scatter(x[anchor_indices], y[anchor_indices], color='red', label='Anchors')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('RF Resonance with Clustered Anchors')
+plt.legend()
+
+# (2) Composite Bézier Curve Approximation (with tension)
+plt.subplot(3, 2, 2)
+plt.plot(x, y, 'k--', alpha=0.3, label='Original')
+plt.plot(bezier_x, bezier_y, 'g-', linewidth=2, label='Composite Bézier')
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('Bézier Curve Approx. (tension=0.5)')
+plt.legend()
+
+# (3) Direct Summation Hybrid
+plt.subplot(3, 2, 3)
+plt.plot(x, y, 'k-', label='RF Resonance (A=10)')
+plt.plot(x, H_direct, 'orange', label='Direct Summation Hybrid')
+plt.xlabel('x')
+plt.ylabel('H(x)')
+plt.title('Direct Summation Hybrid')
+plt.legend()
+
+# (4) Recursive Hybridization
+plt.subplot(3, 2, 4)
+plt.plot(x, y, 'k-', label='RF Resonance (A=10)')
+plt.plot(x, H_recursive, 'purple', label='Recursive Hybridization')
+plt.xlabel('x')
+plt.ylabel('H(x)')
+plt.title('Recursive Hybridization')
+plt.legend()
+
+# (5) Series Expansion Hybrid
+plt.subplot(3, 2, 5)
+plt.plot(x, y, 'k-', label='RF Resonance (A=10)')
+plt.plot(x, H_series, 'brown', label='Series Expansion Hybrid')
+plt.xlabel('x')
+plt.ylabel('H(x)')
+plt.title('Series Expansion Hybrid')
+plt.legend()
+
+# (6) Logarithmic Transformation Hybrid
+plt.subplot(3, 2, 6)
+plt.plot(x, y, 'k-', label='RF Resonance (A=10)')
+plt.plot(x, H_log, 'magenta', label='Logarithmic Transformation Hybrid')
+plt.xlabel('x')
+plt.ylabel('H(x)')
+plt.title('Logarithmic Transformation Hybrid')
+plt.legend()
+
+plt.tight_layout()
+plt.show()
+```
+
 ![Untitled](https://github.com/user-attachments/assets/9536c52f-3879-444d-b528-ae0a6e551270)
+
+---
 
 ### Examples of Onri's Bezier Approximation Techniques Applied to a Graphene Electronic Band Structure
 
