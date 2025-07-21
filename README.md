@@ -82,7 +82,7 @@ Note that integrating a tetration into a polynomial can create extremely large v
 
 ---
 
-Formally, a degree‑$n$ Bézier curve in one spatial dimension (extendable component‑wise to $\mathbb{R}^m$) is
+Formally, a degree‑n Bézier curve in one spatial dimension (extendable component‑wise to $\mathbb{R}^m$) is
 
 $$
 B(t)=\sum_{i=0}^{n}\! \beta_i^{(n)}(t)\,P_i,\qquad 
