@@ -82,7 +82,7 @@ Note that integrating a tetration into a polynomial can create extremely large v
 
 ---
 
-### Why OBA yields *highly accurate* physics formulas
+### Why OBA Yields *Highly Accurate* Physics Formulas
 
 | Property                        | Mathematical reason                                                                                                               | Physical consequence                                                                                 |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -94,7 +94,7 @@ Note that integrating a tetration into a polynomial can create extremely large v
 
 ---
 
-### How *agnostic* the OBA framework already is
+### How *Agnostic* the OBA Framework Already Is
 
 Because it treats every target merely as a *curve in a metric space*, OBA never asks *what* the ordinate represents (charge, entropy, or fluid height), only *where* the sampled points lie.
 
@@ -108,7 +108,7 @@ Because it treats every target merely as a *curve in a metric space*, OBA never 
 
 ---
 
-### Steps to rewrite OBA into an *even more agnostic, adaptive* description
+### Steps to Rewrite OBA into an *Even More Agnostic, Adaptive* Description
 
 1. **Embed dimensionless sampling** –  Replace absolute $t$ with a cumulative arc‑length parameter $s\in[0,1]$; now geometry, not original grid, controls spacing.
 2. **Abstract the growth kernel** –  Generalize the special tetration to a placeholder $\mathcal{G}(t;\theta)$ satisfying
@@ -140,7 +140,7 @@ where lists $\{c_j,\mathcal{G}_j,\phi_j,\theta_j\}$ are supplied at run‑time.
 
 ---
 
-### Mind‑map of connections
+### Mind‑Map of Connections
 
 ```
 OBA
@@ -167,7 +167,7 @@ OBA
 
 ---
 
-### Portmanteaus and etymologies worth noting
+### Portmanteaus & Etymologies
 
 | Term          | Origin                                                          | Note                                                                   |
 | ------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
