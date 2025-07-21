@@ -181,6 +181,426 @@ OBA
 
 ---
 
+### Examples of Onri's Bezier Approximation Techniques Applied to a Graphene Electronic Band Structure (With Threshold Percentile of 50)
+
+```
+import numpy as np
+import matplotlib.pyplot as plt
+
+def hamiltonian_pz(kpts):
+    """
+    Constructs the Hamiltonian for pz orbitals in graphene.
+    """
+    a0 = 1.42  # Carbon-carbon bond length in Ångstroms
+    Ep = 0     # On-site energy for pz orbitals
+    Vpps = 5.618  # Sigma-bonding contribution
+    Vppp = -3.070  # Pi-bonding contribution
+    t = (1/3) * Vpps + Vppp  # Effective hopping parameter
+
+    # Define lattice vectors
+    R1 = a0 * np.array([0, 1])
+    R2 = a0 * np.array([-np.sqrt(3)/2, -1/2])
+    R3 = a0 * np.array([np.sqrt(3)/2, -1/2])
+
+    # Phase factors
+    k1 = np.dot(kpts, R1)
+    k2 = np.dot(kpts, R2)
+    k3 = np.dot(kpts, R3)
+    f = np.exp(1j * k1) + np.exp(1j * k2) + np.exp(1j * k3)
+
+    # Hamiltonian matrix for pz-only model
+    A = Ep
+    B = 4 * t * f
+    H = np.array([[A, B], [np.conj(B), A]])
+    return H
+
+def cubic_bezier(P0, P1, P2, P3, num=100):
+    """
+    Returns num points on a cubic Bezier curve defined by control points P0, P1, P2, P3.
+    Each P is a 2D point (x,y).
+    """
+    t = np.linspace(0, 1, num)
+    curve = np.outer((1-t)**3, P0) + np.outer(3*(1-t)**2*t, P1) \
+          + np.outer(3*(1-t)*t**2, P2) + np.outer(t**3, P3)
+    return curve
+
+# --- Define high-symmetry points and parameters ---
+a = 2.46  # Lattice constant in Ångstroms
+K_const = 2 * np.pi / a  # Reciprocal lattice constant
+
+# Reciprocal lattice vectors
+b1 = K_const * np.array([1, 1/np.sqrt(3)])
+b2 = K_const * np.array([1, -1/np.sqrt(3)])
+
+# High-symmetry points:
+# Γ = (0,0), K = 1/3*(b1+b2), M = 1/2*(b1-b2)
+G_vec = np.array([0, 0])
+K_frac = np.array([1/3, 1/3])
+M_frac = np.array([0, 1/2])
+G = G_vec  # Γ at origin
+K_point = K_frac[0] * b1 + K_frac[1] * b2
+M_point = M_frac[0] * b1 + M_frac[1] * b2
+
+# Define the full k–path: Γ -> K -> M -> Γ
+dk = 1e-2
+NK1 = round(np.linalg.norm(K_point - G) / dk)
+NK2 = round(np.linalg.norm(M_point - K_point) / dk)
+NK3 = round(np.linalg.norm(G - M_point) / dk)
+NT = NK1 + NK2 + NK3
+k_region = np.linspace(0, 1, NT)
+
+# --- Compute the full band structure along the k–path (for reference) ---
+band_full = np.zeros((NT, 2))
+# Γ -> K
+t1_vals = np.linspace(0, 1, NK1)
+for i, t in enumerate(t1_vals):
+    kpt = G + t*(K_point - G)
+    H = hamiltonian_pz(kpt)
+    eigvals = np.linalg.eigvalsh(H)
+    band_full[i, :] = np.real(eigvals)
+# K -> M
+t2_vals = np.linspace(0, 1, NK2)
+for i, t in enumerate(t2_vals):
+    kpt = K_point + t*(M_point - K_point)
+    H = hamiltonian_pz(kpt)
+    eigvals = np.linalg.eigvalsh(H)
+    band_full[i+NK1, :] = np.real(eigvals)
+# M -> Γ
+t3_vals = np.linspace(0, 1, NK3)
+for i, t in enumerate(t3_vals):
+    kpt = M_point + t*(G - M_point)
+    H = hamiltonian_pz(kpt)
+    eigvals = np.linalg.eigvalsh(H)
+    band_full[i+NK1+NK2, :] = np.real(eigvals)
+
+# --- Determine anchor points with extra clusters in high curvature regions ---
+def get_clustered_anchor_indices(k_region, band_values, num_uniform=10, threshold_percentile=70):
+    """
+    Combines uniformly sampled indices with additional anchor points from clusters where the
+    absolute second derivative (approximate curvature) exceeds a given percentile threshold.
+    """
+    uniform_indices = np.linspace(0, len(k_region)-1, num=num_uniform, dtype=int)
+    # Compute first and second derivatives (approximating the curvature)
+    first_deriv = np.gradient(band_values, k_region)
+    second_deriv = np.gradient(first_deriv, k_region)
+    curvature = np.abs(second_deriv)
+    # Set threshold based on the given percentile
+    threshold = np.percentile(curvature, threshold_percentile)
+    # Get indices where curvature exceeds threshold (i.e. regions of high bending)
+    extra_indices = np.where(curvature > threshold)[0]
+    # Combine the uniform anchors with the extra clustered points and sort
+    all_indices = np.sort(np.unique(np.concatenate((uniform_indices, extra_indices))))
+    return all_indices
+
+# For each band, get the clustered anchor indices. Adjust these to get a closer approximation as needed.
+indices_band0 = get_clustered_anchor_indices(k_region, band_full[:, 0], num_uniform=10, threshold_percentile=50)
+indices_band1 = get_clustered_anchor_indices(k_region, band_full[:, 1], num_uniform=10, threshold_percentile=50)
+
+# Define anchors for each band using the computed indices.
+anchors = {
+    0: (k_region[indices_band0], band_full[indices_band0, 0]),
+    1: (k_region[indices_band1], band_full[indices_band1, 1])
+}
+
+def compute_derivatives(x, y):
+    """
+    Compute approximate derivatives at anchor points using finite differences.
+    """
+    m = np.zeros_like(y)
+    n = len(y)
+    for i in range(n):
+        if i == 0:
+            m[i] = (y[i+1] - y[i]) / (x[i+1] - x[i])
+        elif i == n - 1:
+            m[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
+        else:
+            m[i] = (y[i+1] - y[i-1]) / (x[i+1] - x[i-1])
+    return m
+
+# Compute derivatives for each band's anchors.
+derivatives = {
+    band: compute_derivatives(anchors[band][0], anchors[band][1])
+    for band in [0, 1]
+}
+
+def bezier_from_anchors(x, y, m, num_seg=100):
+    """
+    Construct a composite Bezier curve from anchor points (x,y) with derivatives m.
+    Each segment uses a cubic Bezier curve determined by endpoints and estimated slopes.
+    Returns the composite curve and a list of control points for each segment.
+    """
+    curve_x = []
+    curve_y = []
+    control_points_list = []  # Store control points for each segment
+    n = len(x)
+    for i in range(n-1):
+        x0, y0, m0 = x[i], y[i], m[i]
+        x1, y1, m1 = x[i+1], y[i+1], m[i+1]
+        dx = x1 - x0
+        # Determine control points using a cubic Hermite formulation:
+        P0 = np.array([x0, y0])
+        P3 = np.array([x1, y1])
+        P1 = np.array([x0 + dx/3.0, y0 + (dx/3.0)*m0])
+        P2 = np.array([x1 - dx/3.0, y1 - (dx/3.0)*m1])
+        control_points_list.append(np.array([P0, P1, P2, P3]))
+        segment = cubic_bezier(P0, P1, P2, P3, num_seg)
+        if i > 0:
+            segment = segment[1:]  # Avoid duplicate points at segment boundaries.
+        curve_x.extend(segment[:,0])
+        curve_y.extend(segment[:,1])
+    return np.array(curve_x), np.array(curve_y), control_points_list
+
+# Generate composite Bezier curves and control points for each band.
+bezier_curves = {}
+control_points_all = {}
+for band in [0, 1]:
+    bx, by, cp_list = bezier_from_anchors(anchors[band][0], anchors[band][1],
+                                          derivatives[band])
+    bezier_curves[band] = (bx, by)
+    control_points_all[band] = cp_list
+
+# --- Plotting ---
+plt.figure(figsize=(8, 5))
+# Plot the original computed bands.
+plt.plot(k_region, band_full[:, 0], 'r--', linewidth=1, alpha=0.5, label='Computed Band 1')
+plt.plot(k_region, band_full[:, 1], 'b--', linewidth=1, alpha=0.5, label='Computed Band 2')
+# Plot the composite Bezier interpolations.
+plt.plot(bezier_curves[0][0], bezier_curves[0][1], 'r', linewidth=2, label='Bezier Approx. Band 1')
+plt.plot(bezier_curves[1][0], bezier_curves[1][1], 'b', linewidth=2, label='Bezier Approx. Band 2')
+# Mark the anchor points.
+plt.plot(anchors[0][0], anchors[0][1], 'ko', markersize=4, label='Anchor Points')
+plt.plot(anchors[1][0], anchors[1][1], 'ko', markersize=4)
+# Plot control points for each segment for each band.
+for band, color in zip([0, 1], ['r', 'b']):
+    for cp in control_points_all[band]:
+        plt.plot(cp[:,0], cp[:,1], 'o--', color=color, markersize=4)
+# Set up x-ticks at high-symmetry points using known indices.
+kpoints_idx = [0, NK1, NK1 + NK2, NT - 1]
+kpoints_x = k_region[kpoints_idx]
+kpoints_labels = ['Γ', 'K', 'M', 'Γ']
+plt.xticks(kpoints_x, kpoints_labels)
+plt.xlabel('k-path')
+plt.ylabel('Energy (eV)')
+plt.title('Graphene Band Structure: Computed vs Composite Bezier Approximation\nwith Extra Clusters of Control Points in High Curvature Regions')
+plt.grid(axis='x', linestyle='--', alpha=0.6)
+plt.ylim([-10, 10])
+plt.legend()
+plt.tight_layout()
+plt.show()
+```
+<img width="1580" height="980" alt="image" src="https://github.com/user-attachments/assets/bc071dd9-2bb3-4ed6-8141-608c9684e48e" />
+
+---
+
+```
+import numpy as np
+import matplotlib.pyplot as plt
+
+def hamiltonian_pz(kpts):
+    """
+    Constructs the Hamiltonian for pz orbitals in graphene.
+    """
+    a0 = 1.42  # Carbon-carbon bond length in Ångstroms
+    Ep = 0     # On-site energy for pz orbitals
+    Vpps = 5.618  # Sigma-bonding contribution
+    Vppp = -3.070  # Pi-bonding contribution
+    t = (1/3) * Vpps + Vppp  # Effective hopping parameter
+
+    # Define lattice vectors
+    R1 = a0 * np.array([0, 1])
+    R2 = a0 * np.array([-np.sqrt(3)/2, -1/2])
+    R3 = a0 * np.array([np.sqrt(3)/2, -1/2])
+
+    # Phase factors
+    k1 = np.dot(kpts, R1)
+    k2 = np.dot(kpts, R2)
+    k3 = np.dot(kpts, R3)
+    f = np.exp(1j * k1) + np.exp(1j * k2) + np.exp(1j * k3)
+
+    # Hamiltonian matrix for pz-only model
+    A = Ep
+    B = 4 * t * f
+    H = np.array([[A, B], [np.conj(B), A]])
+    return H
+
+def cubic_bezier(P0, P1, P2, P3, num=100):
+    """
+    Returns num points on a cubic Bézier curve defined by control points P0, P1, P2, P3.
+    Each P is a 2D point (x,y).
+    """
+    t = np.linspace(0, 1, num)
+    curve = np.outer((1-t)**3, P0) + np.outer(3*(1-t)**2*t, P1) \
+          + np.outer(3*(1-t)*t**2, P2) + np.outer(t**3, P3)
+    return curve
+
+# --- Define high-symmetry points and parameters ---
+a = 2.46  # Lattice constant in Ångstroms
+K_const = 2 * np.pi / a  # Reciprocal lattice constant
+
+# Reciprocal lattice vectors
+b1 = K_const * np.array([1, 1/np.sqrt(3)])
+b2 = K_const * np.array([1, -1/np.sqrt(3)])
+
+# High-symmetry points:
+# Γ = (0,0), K = 1/3*(b1+b2), M = 1/2*(b1-b2)
+G_vec = np.array([0, 0])
+K_frac = np.array([1/3, 1/3])
+M_frac = np.array([0, 1/2])
+G = G_vec  # Γ at origin
+K_point = K_frac[0] * b1 + K_frac[1] * b2
+M_point = M_frac[0] * b1 + M_frac[1] * b2
+
+# Define the full k–path: Γ -> K -> M -> Γ
+dk = 1e-2
+NK1 = round(np.linalg.norm(K_point - G) / dk)
+NK2 = round(np.linalg.norm(M_point - K_point) / dk)
+NK3 = round(np.linalg.norm(G - M_point) / dk)
+NT = NK1 + NK2 + NK3
+k_region = np.linspace(0, 1, NT)
+
+# --- Compute the full band structure along the k–path (for reference) ---
+band_full = np.zeros((NT, 2))
+# Γ -> K
+t1_vals = np.linspace(0, 1, NK1)
+for i, t in enumerate(t1_vals):
+    kpt = G + t*(K_point - G)
+    H = hamiltonian_pz(kpt)
+    eigvals = np.linalg.eigvalsh(H)
+    band_full[i, :] = np.real(eigvals)
+# K -> M
+t2_vals = np.linspace(0, 1, NK2)
+for i, t in enumerate(t2_vals):
+    kpt = K_point + t*(M_point - K_point)
+    H = hamiltonian_pz(kpt)
+    eigvals = np.linalg.eigvalsh(H)
+    band_full[i+NK1, :] = np.real(eigvals)
+# M -> Γ
+t3_vals = np.linspace(0, 1, NK3)
+for i, t in enumerate(t3_vals):
+    kpt = M_point + t*(G - M_point)
+    H = hamiltonian_pz(kpt)
+    eigvals = np.linalg.eigvalsh(H)
+    band_full[i+NK1+NK2, :] = np.real(eigvals)
+
+# --- Determine anchor points with extra clusters in high curvature regions ---
+def get_clustered_anchor_indices(k_region, band_values, num_uniform=10, threshold_percentile=50):
+    """
+    Combines uniformly sampled indices with additional anchor points from clusters where the
+    absolute second derivative (approximate curvature) exceeds a given percentile threshold.
+    """
+    uniform_indices = np.linspace(0, len(k_region)-1, num=num_uniform, dtype=int)
+    # Compute first and second derivatives (approximating the curvature)
+    first_deriv = np.gradient(band_values, k_region)
+    second_deriv = np.gradient(first_deriv, k_region)
+    curvature = np.abs(second_deriv)
+    # Set threshold based on the given percentile
+    threshold = np.percentile(curvature, threshold_percentile)
+    # Get indices where curvature exceeds threshold (i.e. regions of high bending)
+    extra_indices = np.where(curvature > threshold)[0]
+    # Combine the uniform anchors with the extra clustered points and sort
+    all_indices = np.sort(np.unique(np.concatenate((uniform_indices, extra_indices))))
+    return all_indices
+
+# For each band, get the clustered anchor indices.
+indices_band0 = get_clustered_anchor_indices(k_region, band_full[:, 0], num_uniform=10, threshold_percentile=50)
+indices_band1 = get_clustered_anchor_indices(k_region, band_full[:, 1], num_uniform=10, threshold_percentile=50)
+
+# Define anchors for each band using the computed indices.
+anchors = {
+    0: (k_region[indices_band0], band_full[indices_band0, 0]),
+    1: (k_region[indices_band1], band_full[indices_band1, 1])
+}
+
+def compute_derivatives(x, y):
+    """
+    Compute approximate derivatives at anchor points using finite differences.
+    """
+    m = np.zeros_like(y)
+    n = len(y)
+    for i in range(n):
+        if i == 0:
+            m[i] = (y[i+1] - y[i]) / (x[i+1] - x[i])
+        elif i == n - 1:
+            m[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
+        else:
+            m[i] = (y[i+1] - y[i-1]) / (x[i+1] - x[i-1])
+    return m
+
+# Compute derivatives for each band's anchors.
+derivatives = {
+    band: compute_derivatives(anchors[band][0], anchors[band][1])
+    for band in [0, 1]
+}
+
+def bezier_from_anchors(x, y, m, num_seg=100):
+    """
+    Construct a composite Bézier curve from anchor points (x,y) with derivatives m.
+    Each segment uses a cubic Bézier curve determined by endpoints and estimated slopes.
+    Returns the composite curve and a list of control points for each segment.
+    """
+    curve_x = []
+    curve_y = []
+    control_points_list = []  # Store control points for each segment
+    n = len(x)
+    for i in range(n-1):
+        x0, y0, m0 = x[i], y[i], m[i]
+        x1, y1, m1 = x[i+1], y[i+1], m[i+1]
+        dx = x1 - x0
+        # Determine control points using a cubic Hermite formulation:
+        P0 = np.array([x0, y0])
+        P3 = np.array([x1, y1])
+        P1 = np.array([x0 + dx/3.0, y0 + (dx/3.0)*m0])
+        P2 = np.array([x1 - dx/3.0, y1 - (dx/3.0)*m1])
+        control_points_list.append(np.array([P0, P1, P2, P3]))
+        segment = cubic_bezier(P0, P1, P2, P3, num_seg)
+        if i > 0:
+            segment = segment[1:]  # Avoid duplicate points at segment boundaries.
+        curve_x.extend(segment[:,0])
+        curve_y.extend(segment[:,1])
+    return np.array(curve_x), np.array(curve_y), control_points_list
+
+# Generate composite Bézier curves and control points for each band.
+bezier_curves = {}
+control_points_all = {}
+for band in [0, 1]:
+    bx, by, cp_list = bezier_from_anchors(anchors[band][0], anchors[band][1],
+                                          derivatives[band])
+    bezier_curves[band] = (bx, by)
+    control_points_all[band] = cp_list
+
+# --- Plotting ---
+plt.figure(figsize=(8, 5))
+# Plot the original computed bands.
+plt.plot(k_region, band_full[:, 0], 'r--', linewidth=1, alpha=0.5, label='Computed Band 1')
+plt.plot(k_region, band_full[:, 1], 'b--', linewidth=1, alpha=0.5, label='Computed Band 2')
+# Plot the composite Bézier interpolations.
+plt.plot(bezier_curves[0][0], bezier_curves[0][1], 'r', linewidth=2, label='Bézier Approx. Band 1')
+plt.plot(bezier_curves[1][0], bezier_curves[1][1], 'b', linewidth=2, label='Bézier Approx. Band 2')
+# Mark the anchor points.
+plt.plot(anchors[0][0], anchors[0][1], 'ko', markersize=4, label='Anchor Points')
+plt.plot(anchors[1][0], anchors[1][1], 'ko', markersize=4)
+
+# (Removed code for plotting control points so they are not visible)
+
+# Set up x-ticks at high-symmetry points using known indices.
+kpoints_idx = [0, NK1, NK1 + NK2, NT - 1]
+kpoints_x = k_region[kpoints_idx]
+kpoints_labels = ['Γ', 'K', 'M', 'Γ']
+plt.xticks(kpoints_x, kpoints_labels)
+
+plt.xlabel('k-path')
+plt.ylabel('Energy (eV)')
+plt.title('Graphene Band Structure: Computed vs Composite Bézier Approximation\nwith Extra Clusters of Control Points in High Curvature Regions')
+plt.grid(axis='x', linestyle='--', alpha=0.6)
+plt.ylim([-10, 10])
+plt.legend()
+plt.tight_layout()
+plt.show()
+```
+<img width="1580" height="980" alt="image" src="https://github.com/user-attachments/assets/54caf204-bb37-4812-9942-dbc208dc69ef" />
+
+---
+
 ### Examples of Onri's Bezier Approximation Techniques Applied to RF/MW Resonance Peaks
 
 ```
@@ -637,424 +1057,3 @@ plt.show()
 ![Untitled](https://github.com/user-attachments/assets/9536c52f-3879-444d-b528-ae0a6e551270)
 
 ---
-
-### Examples of Onri's Bezier Approximation Techniques Applied to a Graphene Electronic Band Structure (With Threshold Percentile of 50)
-
-```
-import numpy as np
-import matplotlib.pyplot as plt
-
-def hamiltonian_pz(kpts):
-    """
-    Constructs the Hamiltonian for pz orbitals in graphene.
-    """
-    a0 = 1.42  # Carbon-carbon bond length in Ångstroms
-    Ep = 0     # On-site energy for pz orbitals
-    Vpps = 5.618  # Sigma-bonding contribution
-    Vppp = -3.070  # Pi-bonding contribution
-    t = (1/3) * Vpps + Vppp  # Effective hopping parameter
-
-    # Define lattice vectors
-    R1 = a0 * np.array([0, 1])
-    R2 = a0 * np.array([-np.sqrt(3)/2, -1/2])
-    R3 = a0 * np.array([np.sqrt(3)/2, -1/2])
-
-    # Phase factors
-    k1 = np.dot(kpts, R1)
-    k2 = np.dot(kpts, R2)
-    k3 = np.dot(kpts, R3)
-    f = np.exp(1j * k1) + np.exp(1j * k2) + np.exp(1j * k3)
-
-    # Hamiltonian matrix for pz-only model
-    A = Ep
-    B = 4 * t * f
-    H = np.array([[A, B], [np.conj(B), A]])
-    return H
-
-def cubic_bezier(P0, P1, P2, P3, num=100):
-    """
-    Returns num points on a cubic Bezier curve defined by control points P0, P1, P2, P3.
-    Each P is a 2D point (x,y).
-    """
-    t = np.linspace(0, 1, num)
-    curve = np.outer((1-t)**3, P0) + np.outer(3*(1-t)**2*t, P1) \
-          + np.outer(3*(1-t)*t**2, P2) + np.outer(t**3, P3)
-    return curve
-
-# --- Define high-symmetry points and parameters ---
-a = 2.46  # Lattice constant in Ångstroms
-K_const = 2 * np.pi / a  # Reciprocal lattice constant
-
-# Reciprocal lattice vectors
-b1 = K_const * np.array([1, 1/np.sqrt(3)])
-b2 = K_const * np.array([1, -1/np.sqrt(3)])
-
-# High-symmetry points:
-# Γ = (0,0), K = 1/3*(b1+b2), M = 1/2*(b1-b2)
-G_vec = np.array([0, 0])
-K_frac = np.array([1/3, 1/3])
-M_frac = np.array([0, 1/2])
-G = G_vec  # Γ at origin
-K_point = K_frac[0] * b1 + K_frac[1] * b2
-M_point = M_frac[0] * b1 + M_frac[1] * b2
-
-# Define the full k–path: Γ -> K -> M -> Γ
-dk = 1e-2
-NK1 = round(np.linalg.norm(K_point - G) / dk)
-NK2 = round(np.linalg.norm(M_point - K_point) / dk)
-NK3 = round(np.linalg.norm(G - M_point) / dk)
-NT = NK1 + NK2 + NK3
-k_region = np.linspace(0, 1, NT)
-
-# --- Compute the full band structure along the k–path (for reference) ---
-band_full = np.zeros((NT, 2))
-# Γ -> K
-t1_vals = np.linspace(0, 1, NK1)
-for i, t in enumerate(t1_vals):
-    kpt = G + t*(K_point - G)
-    H = hamiltonian_pz(kpt)
-    eigvals = np.linalg.eigvalsh(H)
-    band_full[i, :] = np.real(eigvals)
-# K -> M
-t2_vals = np.linspace(0, 1, NK2)
-for i, t in enumerate(t2_vals):
-    kpt = K_point + t*(M_point - K_point)
-    H = hamiltonian_pz(kpt)
-    eigvals = np.linalg.eigvalsh(H)
-    band_full[i+NK1, :] = np.real(eigvals)
-# M -> Γ
-t3_vals = np.linspace(0, 1, NK3)
-for i, t in enumerate(t3_vals):
-    kpt = M_point + t*(G - M_point)
-    H = hamiltonian_pz(kpt)
-    eigvals = np.linalg.eigvalsh(H)
-    band_full[i+NK1+NK2, :] = np.real(eigvals)
-
-# --- Determine anchor points with extra clusters in high curvature regions ---
-def get_clustered_anchor_indices(k_region, band_values, num_uniform=10, threshold_percentile=70):
-    """
-    Combines uniformly sampled indices with additional anchor points from clusters where the
-    absolute second derivative (approximate curvature) exceeds a given percentile threshold.
-    """
-    uniform_indices = np.linspace(0, len(k_region)-1, num=num_uniform, dtype=int)
-    # Compute first and second derivatives (approximating the curvature)
-    first_deriv = np.gradient(band_values, k_region)
-    second_deriv = np.gradient(first_deriv, k_region)
-    curvature = np.abs(second_deriv)
-    # Set threshold based on the given percentile
-    threshold = np.percentile(curvature, threshold_percentile)
-    # Get indices where curvature exceeds threshold (i.e. regions of high bending)
-    extra_indices = np.where(curvature > threshold)[0]
-    # Combine the uniform anchors with the extra clustered points and sort
-    all_indices = np.sort(np.unique(np.concatenate((uniform_indices, extra_indices))))
-    return all_indices
-
-# For each band, get the clustered anchor indices. Adjust these to get a closer approximation as needed.
-indices_band0 = get_clustered_anchor_indices(k_region, band_full[:, 0], num_uniform=10, threshold_percentile=50)
-indices_band1 = get_clustered_anchor_indices(k_region, band_full[:, 1], num_uniform=10, threshold_percentile=50)
-
-# Define anchors for each band using the computed indices.
-anchors = {
-    0: (k_region[indices_band0], band_full[indices_band0, 0]),
-    1: (k_region[indices_band1], band_full[indices_band1, 1])
-}
-
-def compute_derivatives(x, y):
-    """
-    Compute approximate derivatives at anchor points using finite differences.
-    """
-    m = np.zeros_like(y)
-    n = len(y)
-    for i in range(n):
-        if i == 0:
-            m[i] = (y[i+1] - y[i]) / (x[i+1] - x[i])
-        elif i == n - 1:
-            m[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
-        else:
-            m[i] = (y[i+1] - y[i-1]) / (x[i+1] - x[i-1])
-    return m
-
-# Compute derivatives for each band's anchors.
-derivatives = {
-    band: compute_derivatives(anchors[band][0], anchors[band][1])
-    for band in [0, 1]
-}
-
-def bezier_from_anchors(x, y, m, num_seg=100):
-    """
-    Construct a composite Bezier curve from anchor points (x,y) with derivatives m.
-    Each segment uses a cubic Bezier curve determined by endpoints and estimated slopes.
-    Returns the composite curve and a list of control points for each segment.
-    """
-    curve_x = []
-    curve_y = []
-    control_points_list = []  # Store control points for each segment
-    n = len(x)
-    for i in range(n-1):
-        x0, y0, m0 = x[i], y[i], m[i]
-        x1, y1, m1 = x[i+1], y[i+1], m[i+1]
-        dx = x1 - x0
-        # Determine control points using a cubic Hermite formulation:
-        P0 = np.array([x0, y0])
-        P3 = np.array([x1, y1])
-        P1 = np.array([x0 + dx/3.0, y0 + (dx/3.0)*m0])
-        P2 = np.array([x1 - dx/3.0, y1 - (dx/3.0)*m1])
-        control_points_list.append(np.array([P0, P1, P2, P3]))
-        segment = cubic_bezier(P0, P1, P2, P3, num_seg)
-        if i > 0:
-            segment = segment[1:]  # Avoid duplicate points at segment boundaries.
-        curve_x.extend(segment[:,0])
-        curve_y.extend(segment[:,1])
-    return np.array(curve_x), np.array(curve_y), control_points_list
-
-# Generate composite Bezier curves and control points for each band.
-bezier_curves = {}
-control_points_all = {}
-for band in [0, 1]:
-    bx, by, cp_list = bezier_from_anchors(anchors[band][0], anchors[band][1],
-                                          derivatives[band])
-    bezier_curves[band] = (bx, by)
-    control_points_all[band] = cp_list
-
-# --- Plotting ---
-plt.figure(figsize=(8, 5))
-# Plot the original computed bands.
-plt.plot(k_region, band_full[:, 0], 'r--', linewidth=1, alpha=0.5, label='Computed Band 1')
-plt.plot(k_region, band_full[:, 1], 'b--', linewidth=1, alpha=0.5, label='Computed Band 2')
-# Plot the composite Bezier interpolations.
-plt.plot(bezier_curves[0][0], bezier_curves[0][1], 'r', linewidth=2, label='Bezier Approx. Band 1')
-plt.plot(bezier_curves[1][0], bezier_curves[1][1], 'b', linewidth=2, label='Bezier Approx. Band 2')
-# Mark the anchor points.
-plt.plot(anchors[0][0], anchors[0][1], 'ko', markersize=4, label='Anchor Points')
-plt.plot(anchors[1][0], anchors[1][1], 'ko', markersize=4)
-# Plot control points for each segment for each band.
-for band, color in zip([0, 1], ['r', 'b']):
-    for cp in control_points_all[band]:
-        plt.plot(cp[:,0], cp[:,1], 'o--', color=color, markersize=4)
-# Set up x-ticks at high-symmetry points using known indices.
-kpoints_idx = [0, NK1, NK1 + NK2, NT - 1]
-kpoints_x = k_region[kpoints_idx]
-kpoints_labels = ['Γ', 'K', 'M', 'Γ']
-plt.xticks(kpoints_x, kpoints_labels)
-plt.xlabel('k-path')
-plt.ylabel('Energy (eV)')
-plt.title('Graphene Band Structure: Computed vs Composite Bezier Approximation\nwith Extra Clusters of Control Points in High Curvature Regions')
-plt.grid(axis='x', linestyle='--', alpha=0.6)
-plt.ylim([-10, 10])
-plt.legend()
-plt.tight_layout()
-plt.show()
-```
-<img width="1580" height="980" alt="image" src="https://github.com/user-attachments/assets/bc071dd9-2bb3-4ed6-8141-608c9684e48e" />
-
----
-
-```
-import numpy as np
-import matplotlib.pyplot as plt
-
-def hamiltonian_pz(kpts):
-    """
-    Constructs the Hamiltonian for pz orbitals in graphene.
-    """
-    a0 = 1.42  # Carbon-carbon bond length in Ångstroms
-    Ep = 0     # On-site energy for pz orbitals
-    Vpps = 5.618  # Sigma-bonding contribution
-    Vppp = -3.070  # Pi-bonding contribution
-    t = (1/3) * Vpps + Vppp  # Effective hopping parameter
-
-    # Define lattice vectors
-    R1 = a0 * np.array([0, 1])
-    R2 = a0 * np.array([-np.sqrt(3)/2, -1/2])
-    R3 = a0 * np.array([np.sqrt(3)/2, -1/2])
-
-    # Phase factors
-    k1 = np.dot(kpts, R1)
-    k2 = np.dot(kpts, R2)
-    k3 = np.dot(kpts, R3)
-    f = np.exp(1j * k1) + np.exp(1j * k2) + np.exp(1j * k3)
-
-    # Hamiltonian matrix for pz-only model
-    A = Ep
-    B = 4 * t * f
-    H = np.array([[A, B], [np.conj(B), A]])
-    return H
-
-def cubic_bezier(P0, P1, P2, P3, num=100):
-    """
-    Returns num points on a cubic Bézier curve defined by control points P0, P1, P2, P3.
-    Each P is a 2D point (x,y).
-    """
-    t = np.linspace(0, 1, num)
-    curve = np.outer((1-t)**3, P0) + np.outer(3*(1-t)**2*t, P1) \
-          + np.outer(3*(1-t)*t**2, P2) + np.outer(t**3, P3)
-    return curve
-
-# --- Define high-symmetry points and parameters ---
-a = 2.46  # Lattice constant in Ångstroms
-K_const = 2 * np.pi / a  # Reciprocal lattice constant
-
-# Reciprocal lattice vectors
-b1 = K_const * np.array([1, 1/np.sqrt(3)])
-b2 = K_const * np.array([1, -1/np.sqrt(3)])
-
-# High-symmetry points:
-# Γ = (0,0), K = 1/3*(b1+b2), M = 1/2*(b1-b2)
-G_vec = np.array([0, 0])
-K_frac = np.array([1/3, 1/3])
-M_frac = np.array([0, 1/2])
-G = G_vec  # Γ at origin
-K_point = K_frac[0] * b1 + K_frac[1] * b2
-M_point = M_frac[0] * b1 + M_frac[1] * b2
-
-# Define the full k–path: Γ -> K -> M -> Γ
-dk = 1e-2
-NK1 = round(np.linalg.norm(K_point - G) / dk)
-NK2 = round(np.linalg.norm(M_point - K_point) / dk)
-NK3 = round(np.linalg.norm(G - M_point) / dk)
-NT = NK1 + NK2 + NK3
-k_region = np.linspace(0, 1, NT)
-
-# --- Compute the full band structure along the k–path (for reference) ---
-band_full = np.zeros((NT, 2))
-# Γ -> K
-t1_vals = np.linspace(0, 1, NK1)
-for i, t in enumerate(t1_vals):
-    kpt = G + t*(K_point - G)
-    H = hamiltonian_pz(kpt)
-    eigvals = np.linalg.eigvalsh(H)
-    band_full[i, :] = np.real(eigvals)
-# K -> M
-t2_vals = np.linspace(0, 1, NK2)
-for i, t in enumerate(t2_vals):
-    kpt = K_point + t*(M_point - K_point)
-    H = hamiltonian_pz(kpt)
-    eigvals = np.linalg.eigvalsh(H)
-    band_full[i+NK1, :] = np.real(eigvals)
-# M -> Γ
-t3_vals = np.linspace(0, 1, NK3)
-for i, t in enumerate(t3_vals):
-    kpt = M_point + t*(G - M_point)
-    H = hamiltonian_pz(kpt)
-    eigvals = np.linalg.eigvalsh(H)
-    band_full[i+NK1+NK2, :] = np.real(eigvals)
-
-# --- Determine anchor points with extra clusters in high curvature regions ---
-def get_clustered_anchor_indices(k_region, band_values, num_uniform=10, threshold_percentile=50):
-    """
-    Combines uniformly sampled indices with additional anchor points from clusters where the
-    absolute second derivative (approximate curvature) exceeds a given percentile threshold.
-    """
-    uniform_indices = np.linspace(0, len(k_region)-1, num=num_uniform, dtype=int)
-    # Compute first and second derivatives (approximating the curvature)
-    first_deriv = np.gradient(band_values, k_region)
-    second_deriv = np.gradient(first_deriv, k_region)
-    curvature = np.abs(second_deriv)
-    # Set threshold based on the given percentile
-    threshold = np.percentile(curvature, threshold_percentile)
-    # Get indices where curvature exceeds threshold (i.e. regions of high bending)
-    extra_indices = np.where(curvature > threshold)[0]
-    # Combine the uniform anchors with the extra clustered points and sort
-    all_indices = np.sort(np.unique(np.concatenate((uniform_indices, extra_indices))))
-    return all_indices
-
-# For each band, get the clustered anchor indices.
-indices_band0 = get_clustered_anchor_indices(k_region, band_full[:, 0], num_uniform=10, threshold_percentile=50)
-indices_band1 = get_clustered_anchor_indices(k_region, band_full[:, 1], num_uniform=10, threshold_percentile=50)
-
-# Define anchors for each band using the computed indices.
-anchors = {
-    0: (k_region[indices_band0], band_full[indices_band0, 0]),
-    1: (k_region[indices_band1], band_full[indices_band1, 1])
-}
-
-def compute_derivatives(x, y):
-    """
-    Compute approximate derivatives at anchor points using finite differences.
-    """
-    m = np.zeros_like(y)
-    n = len(y)
-    for i in range(n):
-        if i == 0:
-            m[i] = (y[i+1] - y[i]) / (x[i+1] - x[i])
-        elif i == n - 1:
-            m[i] = (y[i] - y[i-1]) / (x[i] - x[i-1])
-        else:
-            m[i] = (y[i+1] - y[i-1]) / (x[i+1] - x[i-1])
-    return m
-
-# Compute derivatives for each band's anchors.
-derivatives = {
-    band: compute_derivatives(anchors[band][0], anchors[band][1])
-    for band in [0, 1]
-}
-
-def bezier_from_anchors(x, y, m, num_seg=100):
-    """
-    Construct a composite Bézier curve from anchor points (x,y) with derivatives m.
-    Each segment uses a cubic Bézier curve determined by endpoints and estimated slopes.
-    Returns the composite curve and a list of control points for each segment.
-    """
-    curve_x = []
-    curve_y = []
-    control_points_list = []  # Store control points for each segment
-    n = len(x)
-    for i in range(n-1):
-        x0, y0, m0 = x[i], y[i], m[i]
-        x1, y1, m1 = x[i+1], y[i+1], m[i+1]
-        dx = x1 - x0
-        # Determine control points using a cubic Hermite formulation:
-        P0 = np.array([x0, y0])
-        P3 = np.array([x1, y1])
-        P1 = np.array([x0 + dx/3.0, y0 + (dx/3.0)*m0])
-        P2 = np.array([x1 - dx/3.0, y1 - (dx/3.0)*m1])
-        control_points_list.append(np.array([P0, P1, P2, P3]))
-        segment = cubic_bezier(P0, P1, P2, P3, num_seg)
-        if i > 0:
-            segment = segment[1:]  # Avoid duplicate points at segment boundaries.
-        curve_x.extend(segment[:,0])
-        curve_y.extend(segment[:,1])
-    return np.array(curve_x), np.array(curve_y), control_points_list
-
-# Generate composite Bézier curves and control points for each band.
-bezier_curves = {}
-control_points_all = {}
-for band in [0, 1]:
-    bx, by, cp_list = bezier_from_anchors(anchors[band][0], anchors[band][1],
-                                          derivatives[band])
-    bezier_curves[band] = (bx, by)
-    control_points_all[band] = cp_list
-
-# --- Plotting ---
-plt.figure(figsize=(8, 5))
-# Plot the original computed bands.
-plt.plot(k_region, band_full[:, 0], 'r--', linewidth=1, alpha=0.5, label='Computed Band 1')
-plt.plot(k_region, band_full[:, 1], 'b--', linewidth=1, alpha=0.5, label='Computed Band 2')
-# Plot the composite Bézier interpolations.
-plt.plot(bezier_curves[0][0], bezier_curves[0][1], 'r', linewidth=2, label='Bézier Approx. Band 1')
-plt.plot(bezier_curves[1][0], bezier_curves[1][1], 'b', linewidth=2, label='Bézier Approx. Band 2')
-# Mark the anchor points.
-plt.plot(anchors[0][0], anchors[0][1], 'ko', markersize=4, label='Anchor Points')
-plt.plot(anchors[1][0], anchors[1][1], 'ko', markersize=4)
-
-# (Removed code for plotting control points so they are not visible)
-
-# Set up x-ticks at high-symmetry points using known indices.
-kpoints_idx = [0, NK1, NK1 + NK2, NT - 1]
-kpoints_x = k_region[kpoints_idx]
-kpoints_labels = ['Γ', 'K', 'M', 'Γ']
-plt.xticks(kpoints_x, kpoints_labels)
-
-plt.xlabel('k-path')
-plt.ylabel('Energy (eV)')
-plt.title('Graphene Band Structure: Computed vs Composite Bézier Approximation\nwith Extra Clusters of Control Points in High Curvature Regions')
-plt.grid(axis='x', linestyle='--', alpha=0.6)
-plt.ylim([-10, 10])
-plt.legend()
-plt.tight_layout()
-plt.show()
-```
-<img width="1580" height="980" alt="image" src="https://github.com/user-attachments/assets/54caf204-bb37-4812-9942-dbc208dc69ef" />
-
-
-
