@@ -175,7 +175,7 @@ OBA
 
 | Term          | Origin                                                          | Note                                                                   |
 | ------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| **Bézier**    | Pierre Bézier, French engineer                                  | Popularised cubic curves for Renault in the 1960 s.                    |
+| **Bézier**    | Pierre Bézier, French engineer                                  | Popularized cubic curves for Renault in the 1960 s.                    |
 | **Tetration** | *tetra* (four) + *iteration*                                    | Fourth hyper‑operation after addition, multiplication, exponentiation. |
 | **Pentation** | Future *penta* (five) hyper‑operation; candidate growth kernel. |                                                                        |
 | **OBA**       | Onri’s Bézier Approximation                                     | Combines geometric Bézier with analytic boosters.                      |
