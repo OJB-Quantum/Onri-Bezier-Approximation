@@ -12,7 +12,7 @@ Note that integrating a tetration into a polynomial can create extremely large v
 
 # Defining What a Bezier Curve is Doing Mathematically
 
-| **Concept**                        | **Equation / Explanation**                                                                                                                                       |
+| **Concept**                        | **Equation/ Explanation**                                                                                                                                       |
 |------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **General Bézier Curve**           | $B(t) = \sum_{i=0}^{n} B_i^n(t) P_i$                                                                                                                               |
 | **Bernstein Basis Polynomial**     | $B_i^n(t) = \binom{n}{i} (1-t)^{n-i} t^i$                                                                                                                         |
@@ -58,7 +58,7 @@ Note that integrating a tetration into a polynomial can create extremely large v
 
 ## Towards Hybrid Bezier Curves for Approximation
 
-| **Concept**                   | **Equation / Explanation** |
+| **Concept**                   | **Equation/ Explanation** |
 |-------------------------------|----------------------------|
 | **Polynomial Definition**     | A polynomial consists of a series of terms involving powers of a variable, typically expressed as: <br />$P(x) = a_n x^n + a_{n-1} x^{n-1} + \dots + a_1 x + a_0$<br />where the exponents are **added** sequentially. |
 | **Tetration Definition**      | Tetration is a form of repeated exponentiation, written as: <br />$^n a = a^{a^{a^{\dots}}}$<br />where the exponentiation **stacks** instead of adding. |
@@ -68,7 +68,7 @@ Note that integrating a tetration into a polynomial can create extremely large v
 
 ---
 
-| **Concept**                                     | **Equation / Explanation** |
+| **Concept**                                     | **Equation/ Explanation** |
 |-------------------------------------------------|----------------------------|
 | **Hybrid Polynomial-Tetration Possibility**    | A **polynomial power series** can be **appended or modified as a hybrid with tetration**, depending on how the two mathematical structures are combined. |
 | **1. Direct Summation (Appending a Tetration Term)** | A tetration term is added to a polynomial power series: <br />$H(x) = \sum_{n=0}^{\infty} a_n x^n + c \cdot {}^m x$<br />where: <br />- $\sum_{n=0}^{\infty} a_n x^n$ is a traditional polynomial or power series,<br />- ${}^m x$ is the **tetration term**,<br />- $c$ is a scaling coefficient.<br />**Blends polynomial growth with tetration's extreme growth.** |
