@@ -1,5 +1,7 @@
-# Bezier-Approximation-Plus - Onri's Bezier Approximation (OBA)
+# Bezier-Approximation-Plus - Onri's Bezier Approximation (OBA) 
 Applied ideas on using Bezier curves &amp; hybrid tetrational-polynomials to fit or approximate curves in data of virtually any magnitude. Authored by Onri Jay Benally.
+
+Primary URL for the repository: [OJB-Quantum/Bezier-Approximation-Plus](https://github.com/OJB-Quantum/Bezier-Approximation-Plus)
 
 Basic Bezier curves, being the useful geometric tools that they are, can be described by a Bernstein basis polynomial. They can be adapted to follow objects that bend using hidden control handles and anchor points placed along an existing curve or virtual contour of interest, as shown in this repository. With that in mind, I thought of adapting a polynomial for the Bezier curve with tetrations or super exponentials to form a hybrid approach that compensates for very sharp and large changes in data curves. It does so by mathematically describing the anchor points and control points of a Bezier curve, as well as where they are located in some data plotting space or layout, how dense the clusters of anchor points are as determined by a given threshold, and how large a tetration or super exponential should be according to the size distance between the smallest and largest values of interest locally or globally in order to move anchor points and control points to where they need to be. 
 
