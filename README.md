@@ -170,7 +170,7 @@ An augmented **curvature‑aware anchor selection** (based on $\kappa=\lvert x'y
 $$
 \boxed{ 
 H(t)=\underbrace{\sum_{i=0}^{n}\beta_i^{(n)}(t)\,P_i}_{\text{Bézier backbone}} \;+\; 
-\underbrace{c\,\mathcal{T}_m(\lambda t+\mu)}_{\text{optional growth, zero‑mean, Hann‑windowed}},
+\underbrace{c\,\mathcal{T}_m(\lambda t+\mu)}_{\text{optional growth, zero‑mean, Hann‑windowed}}},
 }
 $$
 
