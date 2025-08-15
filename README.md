@@ -185,7 +185,7 @@ where $\mathcal{T}_m$ is a **guarded** tetrational motif (log‑damped or series
 * **Why Bézier first?** Bernstein polynomials form a partition of unity, so the fitted curve **stays inside** the convex hull of control points; de Casteljau’s algorithm **stabilizes evaluation** under finite precision.
 * **Why curvature routing?** The anchor density follows $\kappa$, thus we refine **where geometry demands**; and we smooth $\kappa$ slightly to fight noise. 
 * **Why windowed tetration?** Unwindowed towers break floating‑point ranges; windowing and zero‑mean centering avoid endpoint discontinuities and growth bias.
-* **Why monotone PCHIP when needed?** For 1D graphs $y(x)$ with monotone $x$, PCHIP‑like slopes generate smooth candidates without overshoot, as in Fritsch‑Carlson monotone cubic Hermite schemes, and as implemented in SciPy’s `PchipInterpolator`.)
+* **Why monotone PCHIP when needed?** For 1D graphs $y(x)$ with monotone $x$, PCHIP‑like slopes generate smooth candidates without overshoot, as in Fritsch‑Carlson monotone cubic Hermite schemes, and as implemented in SciPy’s `PchipInterpolator`.
 
 ---
 
