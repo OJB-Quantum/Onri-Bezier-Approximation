@@ -199,6 +199,470 @@ OBA
 | **Pentation** | Future *penta* (five) hyper‑operation; candidate growth kernel. |                                                                        |
 | **OBA**       | Onri’s Bézier Approximation                                     | Combines geometric Bézier with analytic boosters.                      |
 
+---
+
+## Below is an Agnostic Post-Plot Script Based on Onri's Bezier Approximation (for Line Plots) 
+
+```
+# OBA Fit Overlay — Agnostic Post-Plot Script
+# ---------------------------------------------------------
+# Paste this AFTER you've drawn any Matplotlib line plots.
+# It will read Line2D objects from the current figure/axes,
+# compute a high-resolution OBA fit per contiguous segment,
+# and overlay dashed curves (and optional anchors).
+#
+# Controls are grouped below. Defaults are safe.
+
+import math
+import numpy as np
+import matplotlib.pyplot as plt
+
+plt.rcParams.setdefault("figure.dpi", 250)
+
+# ---- NumPy 2.0 deprecation shim (trapz → trapezoid) ----
+try:
+    _trapz = np.trapezoid   # NumPy >= 2.0
+except AttributeError:
+    _trapz = np.trapz       # older NumPy
+
+# =========================
+# 0) User controls
+# =========================
+# Scope
+PROCESS_ALL_AXES: bool = False   # False: only current axes (plt.gca()); True: all axes in current figure
+FIT_ONLY_VISIBLE: bool = True    # skip hidden lines
+MIN_POINTS_PER_SEG: int = 5      # skip segments shorter than this
+
+# Which lines to include/exclude by label (exact match or substring)
+INCLUDE_SUBSTRINGS = []          # e.g., ["Sweep up", "mydata"]
+EXCLUDE_SUBSTRINGS = ["OBA fit", "OBA_anchors"]  # avoid refitting overlays
+
+# OBA clustering & evaluation
+CLUSTER_PERCENTILE: float = 30       # 0–100; higher → cluster only at very sharpest bends
+CANDIDATE_OVERSAMPLE: int = 12       # try 40–80 for ultra-tight tracking on smooth data
+MAX_ANCHORS_PER_SEG: int = 400       # protective cap
+DENSIFY_ITERS: int = 28              # curvature-mass insertions
+DENSIFY_TOP_FRAC: float = 0.95       # encourage anchors into top-curvature zones
+PACKING_SCALE: float = 0.25          # scales exclusion radius (smaller → denser anchors)
+TANGENT_SOURCE: str = "candidate"    # "candidate" | "centripetal" | "monotone" (monotone uses x; best when x is monotone)
+
+# Optional tetration-like hybrid growth kernel (OFF by default)
+TETRA_ENABLED: bool  = False         # set True to activate
+TETRA_MODE: str      = "log"         # "log" (stable), "direct", or "series"
+TETRA_HEIGHT: int    = 3             # height for iterated exponentiation
+TETRA_SERIES_TERMS: int = 5          # terms for "series" mode
+TETRA_SCALE: float   = 0.02          # amplitude as fraction of the fitted curve’s data range
+TETRA_AXIS: str      = "y"           # "y" or "x"
+
+# Rendering
+SHOW_ANCHORS: bool = True
+ANCHOR_SIZE: float = 12.0
+FIT_LINESTYLE: str = "--"
+FIT_ALPHA: float = 1.0
+ANCHOR_ALPHA: float = 1.0
+
+# Hygiene (re-running the cell)
+REMOVE_PREVIOUS_OVERLAYS: bool = True
+OVERLAY_GID = "oba_fit_overlay"
+ANCHOR_GID  = "oba_fit_anchors"
+
+# =========================
+# 1) Core helpers
+# =========================
+def _smooth_1d(z: np.ndarray, win: int) -> np.ndarray:
+    if win <= 1:
+        return z.copy()
+    k = np.ones(int(win), float) / float(win)
+    pad = int(win) // 2
+    zp = np.pad(z, (pad, pad), mode="reflect")
+    return np.convolve(zp, k, mode="valid")
+
+def _parametric_curvature(sv: np.ndarray, xv: np.ndarray, yv: np.ndarray) -> np.ndarray:
+    x_s = np.gradient(xv, sv, edge_order=1)
+    y_s = np.gradient(yv, sv, edge_order=1)
+    x_ss = np.gradient(x_s, sv, edge_order=1)
+    y_ss = np.gradient(y_s, sv, edge_order=1)
+    num = np.abs(x_s * y_ss - y_s * x_ss)
+    den = (x_s**2 + y_s**2)**1.5 + 1e-12
+    return num / den
+
+def _hermite_to_bezier(Pi, Ti, Pj, Tj, si, sj, mseg: int):
+    h = sj - si
+    c0, c3 = Pi, Pj
+    c1 = Pi + (Ti * h / 3.0)
+    c2 = Pj - (Tj * h / 3.0)
+    t = np.linspace(0.0, 1.0, int(mseg))
+    b = ((1 - t)[:, None] ** 3) * c0 + (3 * (1 - t)[:, None] ** 2 * t[:, None]) * c1 \
+        + (3 * (1 - t)[:, None] * t[:, None] ** 2) * c2 + (t[:, None] ** 3) * c3
+    return b
+
+def _tangents_centripetal(P: np.ndarray, alpha: float = 0.5) -> np.ndarray:
+    n = len(P)
+    T = np.zeros_like(P, float)
+    t = np.zeros(n, float)
+    for i in range(1, n):
+        t[i] = t[i-1] + np.linalg.norm(P[i] - P[i-1])**alpha
+    for i in range(n):
+        if i == 0:
+            dt = t[1] - t[0] if t[1] > t[0] else 1.0
+            T[i] = (P[1] - P[0]) / dt
+        elif i == n - 1:
+            dt = t[-1] - t[-2] if t[-1] > t[-2] else 1.0
+            T[i] = (P[-1] - P[-2]) / dt
+        else:
+            dt = t[i+1] - t[i-1] if t[i+1] > t[i-1] else 1.0
+            T[i] = (P[i+1] - P[i-1]) / dt
+    return T
+
+def _pchip_slopes(s: np.ndarray, y: np.ndarray) -> np.ndarray:
+    s = np.asarray(s, float); y = np.asarray(y, float)
+    n = len(s)
+    m = np.zeros(n, float)
+    ds = np.diff(s); dy = np.diff(y)
+    d = dy / (ds + 1e-15)
+    m[0] = d[0]; m[-1] = d[-1]
+    for i in range(1, n-1):
+        if d[i-1] * d[i] <= 0:
+            m[i] = 0.0
+        else:
+            w1 = 2*ds[i] + ds[i-1]
+            w2 = ds[i] + 2*ds[i-1]
+            m[i] = (w1 + w2) / (w1/(d[i-1]+1e-15) + w2/(d[i]+1e-15))
+    return m
+
+def _pchip_eval(s: np.ndarray, y: np.ndarray, m: np.ndarray, s_eval: np.ndarray) -> np.ndarray:
+    s = np.asarray(s, float); y = np.asarray(y, float); m = np.asarray(m, float)
+    s_eval = np.asarray(s_eval, float)
+    idx = np.searchsorted(s, s_eval, side="right") - 1
+    idx = np.clip(idx, 0, len(s)-2)
+    s0 = s[idx]; s1 = s[idx+1]
+    y0 = y[idx]; y1 = y[idx+1]
+    m0 = m[idx]; m1 = m[idx+1]
+    h = (s_eval - s0) / (s1 - s0 + 1e-15)
+    h2 = h*h; h3 = h2*h
+    H00 = 2*h3 - 3*h2 + 1
+    H10 = h3 - 2*h2 + h
+    H01 = -2*h3 + 3*h2
+    H11 = h3 - h2
+    return H00*y0 + H10*(s1 - s0)*m0 + H01*y1 + H11*(s1 - s0)*m1
+
+def _dense_candidate_curve_generic(x: np.ndarray, y: np.ndarray, oversample: int = 40):
+    """Centripetal-PCHIP in arclength for *generic* (possibly non-monotone) x,y curves."""
+    x = np.asarray(x, float); y = np.asarray(y, float)
+    # Remove NaNs up front (segments will be pre-split; this is a safety net)
+    good = np.isfinite(x) & np.isfinite(y)
+    x = x[good]; y = y[good]
+    if len(x) < 2:
+        return np.array([0.0]), x.copy(), y.copy()
+    dx, dy = np.diff(x), np.diff(y)
+    ds = np.hypot(dx, dy)
+    s = np.concatenate([[0.0], np.cumsum(ds)])
+    if s[-1] == 0:
+        s = np.linspace(0, 1, len(x))
+    else:
+        s = s / s[-1]
+    n_f = max(8*len(s), int(len(s) * max(4, int(oversample))))
+    s_f = np.linspace(0.0, 1.0, int(n_f))
+
+    # PCHIP on x(s) and y(s) independently (parametric Hermite)
+    mx = _pchip_slopes(s, x); my = _pchip_slopes(s, y)
+    x_f = _pchip_eval(s, x, mx, s_f)
+    y_f = _pchip_eval(s, y, my, s_f)
+    return s_f, x_f, y_f
+
+def _tangents_from_candidate(s_f: np.ndarray, x_f: np.ndarray, y_f: np.ndarray, keep_idx: np.ndarray) -> np.ndarray:
+    dx_ds = np.gradient(x_f, s_f, edge_order=1)
+    dy_ds = np.gradient(y_f, s_f, edge_order=1)
+    return np.stack([dx_ds[keep_idx], dy_ds[keep_idx]], axis=1)
+
+# ---- Tetration-like hybrid growth kernel (optional) ----
+def _tetration_unit(z: np.ndarray, height: int) -> np.ndarray:
+    z = np.clip(z, 0.0, 1.0) + 1e-15
+    out = z.copy()
+    h = int(max(1, height))
+    for _ in range(h - 1):
+        out = np.power(z, np.clip(out, 0.0, 1.0))
+    return out
+
+def _tetration_series(z: np.ndarray, terms: int) -> np.ndarray:
+    s = np.zeros_like(z)
+    T = int(max(1, terms))
+    for k in range(1, T + 1):
+        s += z**k / math.factorial(k)
+    return s
+
+def _hybrid_bump(n_points: int, mode: str, height: int, series_terms: int) -> np.ndarray:
+    sc = np.linspace(0.0, 1.0, int(max(2, n_points)))
+    if mode == "direct":
+        b = _tetration_unit(sc, height)
+    elif mode == "series":
+        b = _tetration_series(sc, series_terms)
+    else:  # "log" (stable default)
+        b = np.log(_tetration_unit(sc, height) + 1.0)
+    b = b - b.mean()
+    w = 0.5 - 0.5*np.cos(2*np.pi*sc)  # Hann window → pinned endpoints
+    return b * w
+
+def _map_percentile_to_hparams(p: float):
+    a = float(np.clip(p, 0.0, 100.0)) / 100.0
+    return dict(
+        r_base=float(np.interp(a, [0, 1], [0.01, 0.08])),
+        r_min_floor=float(np.interp(a, [0, 1], [1e-7, 5e-7])),
+        r_shrink_max=float(np.interp(a, [0, 1], [0.97, 0.999])),
+        r_power=float(np.interp(a, [0, 1], [4.0, 8.0])),
+        smooth_window=int(round(np.interp(a, [0, 1], [7, 13]))),
+        num_seg_per_bezier=int(round(np.interp(a, [0, 1], [260, 360]))),
+    )
+
+def _oba_fit_highres_follow_generic(
+    x: np.ndarray,
+    y: np.ndarray,
+    cluster_percentile: float = 30.0,
+    oversample: int = 12,
+    max_anchors: int = 400,
+    densify_iters: int = 28,
+    densify_top_frac: float = 0.95,
+    packing_scale: float = 0.25,
+    tangent_source: str = "candidate",
+    tetra_enabled: bool = False,
+    tetra_mode: str = "log",
+    tetra_height: int = 3,
+    tetra_series_terms: int = 5,
+    tetra_scale: float = 0.02,
+    tetra_axis: str = "y",
+):
+    # Dense candidate parametric curve
+    s_f, x_f, y_f = _dense_candidate_curve_generic(x, y, oversample=max(4, int(oversample)))
+    hp = _map_percentile_to_hparams(cluster_percentile)
+
+    # Curvature weight
+    kappa = _smooth_1d(_parametric_curvature(s_f, x_f, y_f), hp["smooth_window"])
+    kappa = np.maximum(kappa, 0.0)
+    thr = np.percentile(kappa, float(cluster_percentile))
+    kmax = float(kappa.max()) if kappa.size else 1.0
+    w = np.clip((kappa - thr) / (kmax - thr + 1e-15), 0.0, 1.0)
+
+    # Pass 1: variable-radius greedy selection
+    r_local = hp["r_base"] * (1.0 - hp["r_shrink_max"] * (w ** hp["r_power"]))
+    r_local = np.maximum(r_local, hp["r_min_floor"]) * float(max(1e-6, packing_scale))
+    order = np.argsort(-w).astype(int)
+    order = order[(order >= 0) & (order < len(s_f))]
+
+    keep = [0, len(s_f)-1]
+    kept = np.zeros(len(s_f), bool); kept[0] = kept[-1] = True
+
+    def _too_close(i: int) -> bool:
+        for j in np.where(kept)[0]:
+            if abs(s_f[i] - s_f[j]) < min(r_local[i], r_local[j]):
+                return True
+        return False
+
+    for i in order:
+        if kept[i]:
+            continue
+        if not _too_close(i):
+            keep.append(i); kept[i] = True
+        if len(keep) >= max_anchors:
+            break
+
+    keep.sort()
+    keep = np.array(keep, int)
+
+    # Pass 2: densify where curvature mass is largest
+    target_top = int(densify_top_frac * len(keep))
+    for _ in range(int(densify_iters)):
+        thr95 = np.percentile(kappa, 95.0)
+        n_top = np.count_nonzero(kappa[keep] >= thr95)
+        if n_top >= target_top or len(keep) >= max_anchors:
+            break
+        best_gain = 0.0; best_pos = None; best_insert = None
+        for a_idx in range(len(keep)-1):
+            i, j = keep[a_idx], keep[a_idx+1]
+            if j <= i + 1:
+                continue
+            window = slice(i+1, j)
+            mass = _trapz(w[window], s_f[window])
+            if mass > best_gain:
+                loc = int(np.argmax(kappa[window])) + (i+1)
+                best_gain = mass; best_pos = loc; best_insert = a_idx + 1
+        if best_pos is None:
+            break
+        pos = int(best_pos)
+        if pos < 0 or pos >= len(s_f):
+            continue
+        if not _too_close(pos):
+            keep = np.insert(keep, best_insert, pos)
+
+    # Build anchors & tangents
+    s_a = s_f[keep]
+    P_a = np.stack([x_f[keep], y_f[keep]], axis=1)
+
+    if tangent_source == "candidate":
+        T = _tangents_from_candidate(s_f, x_f, y_f, keep)
+    elif tangent_source == "centripetal":
+        T = _tangents_centripetal(P_a, alpha=0.5)
+    elif tangent_source == "monotone":
+        # Monotone variant is less meaningful for generic curves; fallback to candidate if unstable
+        try:
+            # Map monotone in s (always monotone), approximate with PCHIP slope on y vs s and x vs s
+            dx_ds = np.gradient(x_f, s_f, edge_order=1)
+            dy_ds = np.gradient(y_f, s_f, edge_order=1)
+            T = np.stack([dx_ds[keep], dy_ds[keep]], axis=1)
+        except Exception:
+            T = _tangents_centripetal(P_a, alpha=0.5)
+    else:
+        T = _tangents_centripetal(P_a, alpha=0.5)
+
+    # Composite Bézier evaluation
+    seg_pts = []
+    for i in range(len(s_a)-1):
+        seg = _hermite_to_bezier(P_a[i], T[i], P_a[i+1], T[i+1],
+                                 s_a[i], s_a[i+1], hp["num_seg_per_bezier"])
+        if i > 0: seg = seg[1:]  # avoid duplicate joints
+        seg_pts.append(seg)
+    seg_pts = np.vstack(seg_pts) if seg_pts else P_a.copy()
+
+    # Optional tetration-like bump
+    if tetra_enabled and len(seg_pts) > 2:
+        bump = _hybrid_bump(len(seg_pts), tetra_mode, tetra_height, tetra_series_terms)
+        if tetra_axis.lower() == "y":
+            amp = float(tetra_scale) * max(1e-15, np.ptp(y_f))
+            seg_pts[:, 1] = seg_pts[:, 1] + amp * bump
+        else:
+            amp = float(tetra_scale) * max(1e-15, np.ptp(x_f))
+            seg_pts[:, 0] = seg_pts[:, 0] + amp * bump
+
+    return seg_pts[:,0], seg_pts[:,1], P_a
+
+# =========================
+# 2) Axes crawler + overlay
+# =========================
+def _split_nan_segments(x: np.ndarray, y: np.ndarray):
+    """Yield contiguous (x,y) segments with finite data."""
+    x = np.asarray(x, float); y = np.asarray(y, float)
+    good = np.isfinite(x) & np.isfinite(y)
+    if not np.any(good):
+        return
+    idx = np.where(~good)[0]
+    # segment boundaries across NaNs
+    starts = np.r_[0, idx + 1]
+    stops  = np.r_[idx, len(x) - 1]
+    # filter valid ranges
+    mask = starts <= stops
+    starts = starts[mask]; stops = stops[mask]
+    # merge consecutive NaNs collapse
+    last_stop = -1
+    for s, e in zip(starts, stops):
+        if s <= last_stop:
+            continue
+        # extend s forward to first good
+        while s <= e and not (np.isfinite(x[s]) and np.isfinite(y[s])):
+            s += 1
+        # shrink e backward to last good
+        while e >= s and not (np.isfinite(x[e]) and np.isfinite(y[e])):
+            e -= 1
+        if e - s + 1 >= MIN_POINTS_PER_SEG:
+            yield x[s:e+1], y[s:e+1]
+        last_stop = e
+
+def _label_included(label: str) -> bool:
+    if any(sub in label for sub in EXCLUDE_SUBSTRINGS):
+        return False
+    if INCLUDE_SUBSTRINGS:
+        return any(sub in label for sub in INCLUDE_SUBSTRINGS)
+    return True  # include by default
+
+def apply_oba_to_axes(ax: plt.Axes):
+    if REMOVE_PREVIOUS_OVERLAYS:
+        old = [ln for ln in ax.get_lines() if ln.get_gid() in (OVERLAY_GID, ANCHOR_GID)]
+        for ln in old:
+            try:
+                ln.remove()
+            except Exception:
+                pass
+
+    for line in list(ax.get_lines()):
+        label = line.get_label() or ""
+        if line.get_gid() in (OVERLAY_GID, ANCHOR_GID):
+            continue
+        if not _label_included(label):
+            continue
+        if FIT_ONLY_VISIBLE and (not line.get_visible()):
+            continue
+
+        xdata = np.asarray(line.get_xdata(), float)
+        ydata = np.asarray(line.get_ydata(), float)
+        if len(xdata) < MIN_POINTS_PER_SEG:
+            continue
+
+        color = line.get_color()
+        lw_fit = max(0.8, 0.9 * line.get_linewidth())
+
+        for xs, ys in _split_nan_segments(xdata, ydata):
+            if len(xs) < MIN_POINTS_PER_SEG:
+                continue
+            bx, by, anchors = _oba_fit_highres_follow_generic(
+                xs, ys,
+                cluster_percentile=CLUSTER_PERCENTILE,
+                oversample=CANDIDATE_OVERSAMPLE,
+                max_anchors=MAX_ANCHORS_PER_SEG,
+                densify_iters=DENSIFY_ITERS,
+                densify_top_frac=DENSIFY_TOP_FRAC,
+                packing_scale=PACKING_SCALE,
+                tangent_source=TANGENT_SOURCE,
+                tetra_enabled=TETRA_ENABLED,
+                tetra_mode=TETRA_MODE,
+                tetra_height=TETRA_HEIGHT,
+                tetra_series_terms=TETRA_SERIES_TERMS,
+                tetra_scale=TETRA_SCALE,
+                tetra_axis=TETRA_AXIS,
+            )
+
+            # Overlay the fitted curve
+            ax.plot(
+                bx, by,
+                FIT_LINESTYLE,
+                color=color,
+                alpha=FIT_ALPHA,
+                linewidth=lw_fit,
+                label=(label + " (OBA fit)") if label and label != "_nolegend_" else "OBA fit",
+                gid=OVERLAY_GID,
+                zorder=(line.get_zorder() + 0.1),
+            )
+
+            # Optional anchors
+            if SHOW_ANCHORS and len(anchors) > 0:
+                ax.scatter(
+                    anchors[:, 0], anchors[:, 1],
+                    s=ANCHOR_SIZE, marker="o",
+                    color=color, alpha=ANCHOR_ALPHA,
+                    label="OBA anchors" if label == "" or label == "_nolegend_" else f"{label} (OBA anchors)",
+                    gid=ANCHOR_GID,
+                    zorder=(line.get_zorder() + 0.2),
+                )
+
+    # Keep legends sane: deduplicate labels
+    handles, labels = ax.get_legend_handles_labels()
+    uniq = {}
+    for h, l in zip(handles, labels):
+        if l not in uniq:
+            uniq[l] = h
+    if uniq:
+        ax.legend(uniq.values(), uniq.keys(), ncol=2, fontsize=9)
+
+# =========================
+# 3) Run on current figure
+# =========================
+if PROCESS_ALL_AXES:
+    fig = plt.gcf()
+    for _ax in fig.axes:
+        apply_oba_to_axes(_ax)
+else:
+    apply_oba_to_axes(plt.gca())
+
+plt.tight_layout()
+plt.draw()
+```
 
 ---
 
