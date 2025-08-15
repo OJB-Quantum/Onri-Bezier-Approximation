@@ -3,7 +3,7 @@ Applied ideas on using Bezier curves &amp; hybrid tetrational-polynomials to fit
 
 [![License](https://img.shields.io/badge/GNU_General_Public-License-Green)](https://choosealicense.com/licenses/gpl-3.0)
 
-Primary URL for the repository: [OJB-Quantum/Bezier-Approximation-Plus](https://github.com/OJB-Quantum/Bezier-Approximation-Plus)
+Primary URL for the repository: [OJB-Quantum/Onri-Bezier-Approximation](https://github.com/OJB-Quantum/Onri-Bezier-Approximation)
 
 View an interactive tool in the browser the demonstrate Bezier approximation: [OBA Demos](https://g.co/gemini/share/35aaa5180fc9)
 
