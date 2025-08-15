@@ -258,6 +258,59 @@ OBA
 
 ---
 
+### Controls & Parameters (Full Tables)
+#### Global Scope & Hygiene
+
+| Name                       |       Type |                     Default | Meaning                                                           |
+| -------------------------- | ---------: | --------------------------: | ----------------------------------------------------------------- |
+| `PROCESS_ALL_AXES`         |       bool |                     `False` | Process only `plt.gca()` by default; if `True`, process all axes. |
+| `FIT_ONLY_VISIBLE`         |       bool |                      `True` | Skip hidden lines to avoid touching intermediate elements.        |
+| `MIN_POINTS_PER_SEG`       |        int |                         `5` | Drop segments shorter than this threshold.                        |
+| `INCLUDE_SUBSTRINGS`       | list\[str] |                        `[]` | Optional label filter to include only specific lines.             |
+| `EXCLUDE_SUBSTRINGS`       | list\[str] | `["OBA fit","OBA_anchors"]` | Avoid re‑fitting overlays.                                        |
+| `REMOVE_PREVIOUS_OVERLAYS` |       bool |                      `True` | Clean up old overlays on re‑runs.                                 |
+
+---
+
+#### Clustering, Densification, Tangents
+
+| Name                   |           Type |       Default | Effect                                                                                                                      |
+| ---------------------- | -------------: | ------------: | --------------------------------------------------------------------------------------------------------------------------- |
+| `CLUSTER_PERCENTILE`   | float \[0–100] |          `30` | Higher → pack anchors into the sharpest $\kappa$ regions.                                                                   |
+| `CANDIDATE_OVERSAMPLE` |            int |          `12` | Dense parametric candidate resolution; try `40–80` for tight tracking.                                                      |
+| `MAX_ANCHORS_PER_SEG`  |            int |         `400` | Protective cap to prevent runaway anchor growth.                                                                            |
+| `DENSIFY_ITERS`        |            int |          `28` | Insert anchors in the largest curvature‑mass gaps.                                                                          |
+| `DENSIFY_TOP_FRAC`     |          float |        `0.95` | Target fraction of anchors landing in top‑5% curvature.                                                                     |
+| `PACKING_SCALE`        |          float |        `0.25` | Scales local exclusion radii; smaller → denser anchor packing.                                                              |
+| `TANGENT_SOURCE`       |           enum | `"candidate"` | `"candidate"`, `"centripetal"`, `"monotone"`. Centripetal gives robust geometry; monotone suits strict $x$-monotone graphs. |
+
+---
+
+#### Rendering
+
+| Name            |  Type | Default | Notes                                               |
+| --------------- | ----: | ------: | --------------------------------------------------- |
+| `SHOW_ANCHORS`  |  bool |  `True` | Scatter anchors for inspection.                     |
+| `ANCHOR_SIZE`   | float |  `12.0` | Marker size.                                        |
+| `FIT_LINESTYLE` |   str |  `"--"` | Dashed overlays are distinguishable from originals. |
+| `FIT_ALPHA`     | float |   `1.0` | Opacity of fit lines.                               |
+| `ANCHOR_ALPHA`  | float |   `1.0` | Opacity of anchor markers.                          |
+
+---
+
+#### Optional Hybrid Growth (Tetration‑like bump)
+
+| Name                 |  Type | Default | Effect                                                              |
+| -------------------- | ----: | ------: | ------------------------------------------------------------------- |
+| `TETRA_ENABLED`      |  bool | `False` | Master switch.                                                      |
+| `TETRA_MODE`         |  enum | `"log"` | `"log"` (stable), `"direct"`, or `"series"`.                        |
+| `TETRA_HEIGHT`       |   int |     `3` | Iteration height; effective only for `"direct"` or as input to log. |
+| `TETRA_SERIES_TERMS` |   int |     `5` | Truncation length for `"series"`.                                   |
+| `TETRA_SCALE`        | float |  `0.02` | Bump amplitude as a fraction of data range.                         |
+| `TETRA_AXIS`         |  enum |   `"y"` | Whether to “bump” vertically (`"y"`) or horizontally (`"x"`).       |
+
+---
+
 ## Below is an Agnostic Post-Plot Script Based on Onri's Bezier Approximation (for Line Plots) 
 
 ```
