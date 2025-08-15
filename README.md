@@ -2448,3 +2448,14 @@ plt.show()
 ![Untitled](https://github.com/user-attachments/assets/9536c52f-3879-444d-b528-ae0a6e551270)
 
 ---
+
+## Citing OBA
+```
+@software{benally_oba,
+  author  = {Benally, Onri Jay},
+  title   = {Onri's Bézier Approximation (OBA)},
+  year    = {2025},
+  url     = {https://github.com/OJB-Quantum/Onri-Bezier-Approximation},
+  note    = {Hybrid Bézier+tetration, curvature-aware anchor clustering, post-plot overlays}
+}
+```
