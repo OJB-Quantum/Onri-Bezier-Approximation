@@ -167,9 +167,7 @@ where lists $\{c_j,\mathcal{G}_j,\phi_j,\theta_j\}$ are supplied at run‑time.
 
 An augmented **curvature‑aware anchor selection** (based on $\kappa=\lvert x'y''-y'x''\rvert/(x'^2+y'^2)^{3/2}$) and with a **tetration‑like, endpoint‑pinned bump** to adapt dynamic range without sacrificing stability:
 
-$$\boxed{ 
-H(t)=\underbrace{\sum_{i=0}^{n}\beta_i^{(n)}(t)\,P_i}_{\text{Bézier backbone}}\;+\;\underbrace{c\,\mathcal{T}_m(\lambda t+\mu)}_{\text{optional growth, zero‑mean, Hann‑windowed}}},
-}$$
+$$H(t)=\underbrace{\sum_{i=0}^{n}\beta_i^{(n)}(t)\,P_i}_{\text{Bézier backbone}}\;+\;\underbrace{c\,\mathcal{T}_m(\lambda t+\mu)}_{\text{optional growth, zero‑mean, Hann‑windowed}}}$$
 
 where $\mathcal{T}_m$ is a **guarded** tetrational motif (log‑damped or series‑truncated) that collapses as $m\to 0$, and which is numerically contained via windowing and amplitude scaling. (Curvature formula is standard; tetration’s analytic continuation and regular iteration literature provide the theoretical context. 
 
