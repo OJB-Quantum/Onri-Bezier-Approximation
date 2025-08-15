@@ -170,22 +170,79 @@ OBA
 ├─ Bézier backbone
 │  ├─ Bernstein basis (polynomial heritage)
 │  ├─ de Casteljau algorithm (numerical stability)
-│  └─ Control vs Anchor semantics
+│  ├─ Hermite→Bézier mapping (C¹ continuity; control points from tangents)
+│  ├─ Tangent sources
+│  │  ├─ Candidate-derivative tangents (dx/ds, dy/ds from dense curve)
+│  │  ├─ Centripetal Catmull–Rom (α ≈ 0.5, stable, corner-aware)
+│  │  └─ PCHIP/monotone slopes (when x is monotone; shape-preserving)
+│  └─ Control vs Anchor semantics (anchors come from data; controls are derived)
+├─ High-resolution OBA workflow (plot-agnostic “follow”)
+│  ├─ Data intake & segmentation
+│  │  ├─ Read Matplotlib Line2D arrays (x, y, label, color)
+│  │  ├─ Split at NaNs into contiguous segments
+│  │  └─ Enforce MIN_POINTS_PER_SEG, skip invisibles and prior overlays (gid)
+│  ├─ Parametrization
+│  │  ├─ Arc-length s on raw (x, y); s ∈ [0, 1]
+│  │  └─ Optional dimensionless normalization (range scaling)
+│  ├─ Dense candidate curve (oversample 8×–80×)
+│  │  ├─ PCHIP on x(s) and y(s) → smooth, shape-preserving parametric path
+│  │  └─ Candidate derivatives dx/ds, dy/ds retained for tangents
+│  ├─ Curvature map κ(s)
+│  │  ├─ κ = |x′y″ − y′x″| / (x′² + y′²)^(3/2)
+│  │  └─ Windowed smoothing (7–13 samples) to de-noisify
+│  ├─ Percentile gating
+│  │  └─ thr = percentile(κ, p = CLUSTER_PERCENTILE) → weight w = clamp((κ−thr)/(κ_max−thr))
+│  ├─ Variable-radius greedy anchors
+│  │  ├─ r_local = r_base · (1 − r_shrink_max · w^r_power)  ≥  r_min_floor
+│  │  ├─ PACKING_SCALE multiplies r_local (smaller → more anchors)
+│  │  └─ Greedy keep by descending w, always keep endpoints
+│  ├─ Curvature-mass densification (D iterations)
+│  │  ├─ Pick gap with largest ∫ w(s) ds (NumPy trapezoid shim)
+│  │  └─ Insert at argmax κ inside that gap, respecting r_local and caps
+│  ├─ Tangent selection
+│  │  ├─ Candidate-derivative (default; most faithful to original sweep)
+│  │  ├─ Centripetal Catmull–Rom (robust when data are unevenly spaced)
+│  │  └─ Monotone PCHIP slopes (safe when x is monotone)
+│  ├─ Hermite → Bézier sampling
+│  │  └─ num_seg_per_bezier ≈ 260–360; remove duplicate joints at patch seams
+│  ├─ Optional hybrid growth kernel (endpoint-pinned)
+│  │  ├─ Tetration modes: log | direct | series
+│  │  ├─ Axis: y (typical) or x; Hann window; zero-mean bump
+│  │  └─ Amplitude: TETRA_SCALE · data_range
+│  ├─ Overlay & reporting
+│  │  ├─ Dashed fit in the source line’s color
+│  │  ├─ Optional anchor markers and counts
+│  │  └─ Legend de-dup; overlay guard via gid to avoid self-refitting
+│  └─ Hygiene & guards
+│     ├─ MAX_ANCHORS cap; MIN_POINTS_PER_SEG threshold
+│     ├─ NumPy 2.0 trapz→trapezoid shim for integrals
+│     └─ Robust to non-monotone x, to NaNs, and to mixed units
 ├─ Growth boosters
-│  ├─ Tetration  ← super‑exponential tower
-│  │  ├─ Log‑damped variant
-│  │  └─ Series‑expanded variant
-│  └─ Future kernels (pentation, iterated sine)
-├─ Physics use‑cases
-│  ├─ Electronic band diagrams
-│  ├─ RF/ microwave resonance envelopes
-│  ├─ Fluid contour streamlines
-│  └─ Quantum‑well potential profiles
-└─ Agnostic engine
-   ├─ Dimensionless normalisation
-   ├─ Plugin constraint JSON
-   ├─ Error‑adaptive anchor insertion
-   └─ GPU/ SIMD parallel evaluation
+│  ├─ Tetration  ← super-exponential tower
+│  │  ├─ Log-damped variant (stable, default)
+│  │  └─ Series-expanded variant (controlled via finite terms)
+│  └─ Future kernels (pentation, iterated sine, wavelet bumps)
+├─ Physics use-cases
+│  ├─ Stoner–Wohlfarth (SW) m(H) loops (0°, 45°, 90°; major/minor)
+│  ├─ Tunneling Magnetoresistance (TMR) loops
+│  │  └─ R(Δ) = R_P + (R_AP − R_P)·(1 − cosΔ)/2, Δ from φ_free − θ_pinned
+│  ├─ Electronic band diagrams; quantum-well potential profiles
+│  ├─ RF/microwave resonance envelopes and S-parameter smoothing
+│  ├─ Fluid contour streamlines and vortex edges
+│  └─ Generic hysteresis interpolation with boxy or sloped corners
+├─ Agnostic engine
+│  ├─ Dimensionless normalization and autoscaling
+│  ├─ Plugin constraint JSON (bounds, monotonicity, convexity, fixed knots)
+│  ├─ Error-adaptive anchor insertion (future: target ε / RMSE control)
+│  ├─ GPU/SIMD parallel evaluation (NumPy → CuPy/JAX backends, future)
+│  └─ Deterministic RNG seeds for reproducible anchor placement (future)
+└─ Controls & templates
+   ├─ Plot-agnostic overlay template (Line2D crawler; NaN-aware; label filters)
+   ├─ Colab-ready SW/TMR notebooks with exposed knobs
+   ├─ Knobs: p (percentile), oversample, packing, max_anchors, densify_iters, densify_top_frac
+   ├─ Tangent_source: candidate | centripetal | monotone
+   ├─ Tetration: enabled, mode, height/terms, scale, axis
+   └─ Diagnostics: fit RMSE, curvature histograms, anchor heatmaps, segment logs
 ```
 
 ---
