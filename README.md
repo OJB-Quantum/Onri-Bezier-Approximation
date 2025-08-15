@@ -6,23 +6,17 @@ Applied ideas on using Bezier curves &amp; hybrid tetrational-polynomials to fit
 [![Python](https://img.shields.io/badge/Python-3.10%2B-informational)](#installation)
 
 **Primary repository:** `OJB-Quantum/Onri-Bezier-Approximation`
+
 **Repo URL:** [https://github.com/OJB-Quantum/Onri-Bezier-Approximation](https://github.com/OJB-Quantum/Onri-Bezier-Approximation)
+
 **Interactive demo:** [https://g.co/gemini/share/35aaa5180fc9](https://g.co/gemini/share/35aaa5180fc9)
+
 **Notebook viewer:** [https://nbviewer.org/github/OJB-Quantum/Bezier-Approximation-Plus/tree/main/](https://nbviewer.org/github/OJB-Quantum/Bezier-Approximation-Plus/tree/main/)
 
----
-
-[![License](https://img.shields.io/badge/GNU_General_Public-License-Green)](https://choosealicense.com/licenses/gpl-3.0)
-
-Primary URL for the repository: [OJB-Quantum/Onri-Bezier-Approximation](https://github.com/OJB-Quantum/Onri-Bezier-Approximation)
-
-View an interactive tool in the browser the demonstrate Bezier approximation: [OBA Demos](https://g.co/gemini/share/35aaa5180fc9)
 
 Basic Bezier curves, being the useful geometric tools that they are, can be described by a Bernstein basis polynomial. They can be adapted to follow objects that bend using hidden control handles and anchor points placed along an existing curve or virtual contour of interest, as shown in this repository. With that in mind, I thought of adapting a polynomial for the Bezier curve with tetrations or super exponentials to form a hybrid approach that compensates for very sharp and large changes in data curves. It does so by mathematically describing the anchor points and control points of a Bezier curve, as well as where they are located in some data plotting space or layout, how dense the clusters of anchor points are as determined by a given threshold, and how large a tetration or super exponential should be according to the size distance between the smallest and largest values of interest locally or globally in order to move anchor points and control points to where they need to be. 
 
 Note that integrating a tetration into a polynomial can create extremely large values, which cannot be represented on any 64-bit or 128-bit computer. Thus, the tetration must be carefully expressed to stay within the compatibility or capability of a 128-bit or 64-bit machine. Some interesting results are provided in this repository applied to real use cases using adjustable clustering of Bezier anchor points, such as approximating electronic band structures for example. Check files for the code provided in a Google Colab notebook.
-
-### Click here to render the notebooks in the browser: [![nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.org/github/OJB-Quantum/Onri-Bezier-Approximation/tree/main/)
 
 ![ezgif-418d14bce1cd40](https://github.com/user-attachments/assets/dd806438-3021-4664-bea7-432d8a6186e3)
 
