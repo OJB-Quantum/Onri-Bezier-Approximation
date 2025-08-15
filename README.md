@@ -1,4 +1,4 @@
-# Bezier-Approximation-Plus - Onri's Bezier Approximation (OBA) 
+# Onri's Bezier Approximation (OBA) 
 Applied ideas on using Bezier curves &amp; hybrid tetrational-polynomials to fit or approximate curves in data of virtually any magnitude. Authored by Onri Jay Benally.
 
 [![License](https://img.shields.io/badge/GNU_General_Public-License-Green)](https://choosealicense.com/licenses/gpl-3.0)
