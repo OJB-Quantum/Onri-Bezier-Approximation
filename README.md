@@ -214,7 +214,7 @@ OBA
 │  │  ├─ PCHIP on x(s) and y(s) → smooth, shape-preserving parametric path
 │  │  └─ Candidate derivatives dx/ds, dy/ds retained for tangents
 │  ├─ Curvature map κ(s)
-│  │  ├─ κ = |x′y″ − y′x″| / (x′² + y′²)^(3/2)
+│  │  ├─ κ = |x′y″ − y′x″|/ (x′² + y′²)^(3/2)
 │  │  └─ Windowed smoothing (7–13 samples) to de-noisify
 │  ├─ Percentile gating
 │  │  └─ thr = percentile(κ, p = CLUSTER_PERCENTILE) → weight w = clamp((κ−thr)/(κ_max−thr))
@@ -281,6 +281,7 @@ OBA
 | **Tetration** | *tetra* (four) + *iteration*                                    | Fourth hyper‑operation after addition, multiplication, exponentiation. |
 | **Pentation** | Future *penta* (five) hyper‑operation; candidate growth kernel. |                                                                        |
 | **OBA**       | Onri’s Bézier Approximation                                     | Combines geometric Bézier with analytic boosters.                      |
+| **PCHIP**     | Piecewise Cubic Hermite Interpolating Polynomial                |                                                                        |
 
 ---
 
