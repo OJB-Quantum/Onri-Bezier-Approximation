@@ -7,7 +7,7 @@ Applied ideas on using Bezier curves &amp; hybrid tetrational-polynomials to fit
 
 **Primary repository:** `OJB-Quantum/Onri-Bezier-Approximation`
 
-**Repo URL:** [https://github.com/OJB-Quantum/Onri-Bezier-Approximation](https://github.com/OJB-Quantum/Onri-Bezier-Approximation)
+**Repository URL:** [https://github.com/OJB-Quantum/Onri-Bezier-Approximation](https://github.com/OJB-Quantum/Onri-Bezier-Approximation)
 
 **Interactive demo:** [https://g.co/gemini/share/35aaa5180fc9](https://g.co/gemini/share/35aaa5180fc9)
 
