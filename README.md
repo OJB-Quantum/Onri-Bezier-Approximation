@@ -163,6 +163,32 @@ where lists $\{c_j,\mathcal{G}_j,\phi_j,\theta_j\}$ are supplied at run‑time.
 
 ---
 
+### The Practical Version Remains
+
+An augmented **curvature‑aware anchor selection** (based on $\kappa=\lvert x'y''-y'x''\rvert/(x'^2+y'^2)^{3/2}$) and with a **tetration‑like, endpoint‑pinned bump** to adapt dynamic range without sacrificing stability:
+
+<img width="1936" height="357" alt="image" src="https://github.com/user-attachments/assets/35a953c9-9249-40f3-b77f-50cacd0fa405" />
+
+```
+H(t)=\underbrace{\sum_{i=0}^{n}\beta_i^{(n)}(t)\,P_i}_{\text{Bézier backbone}}
+\;+\;
+\underbrace{c\,\mathcal{T}_m(\lambda t+\mu)}_{\text{optional growth, zero-mean, Hann-windowed}}
+```
+
+
+where $\mathcal{T}_m$ is a **guarded** tetrational motif (log‑damped or series‑truncated) that collapses as $m\to 0$, and which is numerically contained via windowing and amplitude scaling. (Curvature formula is standard; tetration’s analytic continuation and regular iteration literature provide the theoretical context. 
+
+---
+
+## Numerical Stability & Range Safety
+
+* **Why Bézier first?** Bernstein polynomials form a partition of unity, so the fitted curve **stays inside** the convex hull of control points; de Casteljau’s algorithm **stabilizes evaluation** under finite precision.
+* **Why curvature routing?** The anchor density follows $\kappa$, thus we refine **where geometry demands**; and we smooth $\kappa$ slightly to fight noise. 
+* **Why windowed tetration?** Unwindowed towers break floating‑point ranges; windowing and zero‑mean centering avoid endpoint discontinuities and growth bias.
+* **Why monotone PCHIP when needed?** For 1D graphs $y(x)$ with monotone $x$, PCHIP‑like slopes generate smooth candidates without overshoot, as in Fritsch‑Carlson monotone cubic Hermite schemes, and as implemented in SciPy’s `PchipInterpolator`.
+
+---
+
 ### Mind‑Map of Connections
 
 ```
@@ -255,6 +281,59 @@ OBA
 | **Tetration** | *tetra* (four) + *iteration*                                    | Fourth hyper‑operation after addition, multiplication, exponentiation. |
 | **Pentation** | Future *penta* (five) hyper‑operation; candidate growth kernel. |                                                                        |
 | **OBA**       | Onri’s Bézier Approximation                                     | Combines geometric Bézier with analytic boosters.                      |
+
+---
+
+### Controls & Parameters (Full Tables)
+#### Global Scope & Hygiene
+
+| Name                       |       Type |                     Default | Meaning                                                           |
+| -------------------------- | ---------: | --------------------------: | ----------------------------------------------------------------- |
+| `PROCESS_ALL_AXES`         |       bool |                     `False` | Process only `plt.gca()` by default; if `True`, process all axes. |
+| `FIT_ONLY_VISIBLE`         |       bool |                      `True` | Skip hidden lines to avoid touching intermediate elements.        |
+| `MIN_POINTS_PER_SEG`       |        int |                         `5` | Drop segments shorter than this threshold.                        |
+| `INCLUDE_SUBSTRINGS`       | list\[str] |                        `[]` | Optional label filter to include only specific lines.             |
+| `EXCLUDE_SUBSTRINGS`       | list\[str] | `["OBA fit","OBA_anchors"]` | Avoid re‑fitting overlays.                                        |
+| `REMOVE_PREVIOUS_OVERLAYS` |       bool |                      `True` | Clean up old overlays on re‑runs.                                 |
+
+---
+
+#### Clustering, Densification, Tangents
+
+| Name                   |           Type |       Default | Effect                                                                                                                      |
+| ---------------------- | -------------: | ------------: | --------------------------------------------------------------------------------------------------------------------------- |
+| `CLUSTER_PERCENTILE`   | float \[0–100] |          `30` | Higher → pack anchors into the sharpest $\kappa$ regions.                                                                   |
+| `CANDIDATE_OVERSAMPLE` |            int |          `12` | Dense parametric candidate resolution; try `40–80` for tight tracking.                                                      |
+| `MAX_ANCHORS_PER_SEG`  |            int |         `400` | Protective cap to prevent runaway anchor growth.                                                                            |
+| `DENSIFY_ITERS`        |            int |          `28` | Insert anchors in the largest curvature‑mass gaps.                                                                          |
+| `DENSIFY_TOP_FRAC`     |          float |        `0.95` | Target fraction of anchors landing in top‑5% curvature.                                                                     |
+| `PACKING_SCALE`        |          float |        `0.25` | Scales local exclusion radii; smaller → denser anchor packing.                                                              |
+| `TANGENT_SOURCE`       |           enum | `"candidate"` | `"candidate"`, `"centripetal"`, `"monotone"`. Centripetal gives robust geometry; monotone suits strict $x$-monotone graphs. |
+
+---
+
+#### Rendering
+
+| Name            |  Type | Default | Notes                                               |
+| --------------- | ----: | ------: | --------------------------------------------------- |
+| `SHOW_ANCHORS`  |  bool |  `True` | Scatter anchors for inspection.                     |
+| `ANCHOR_SIZE`   | float |  `12.0` | Marker size.                                        |
+| `FIT_LINESTYLE` |   str |  `"--"` | Dashed overlays are distinguishable from originals. |
+| `FIT_ALPHA`     | float |   `1.0` | Opacity of fit lines.                               |
+| `ANCHOR_ALPHA`  | float |   `1.0` | Opacity of anchor markers.                          |
+
+---
+
+#### Optional Hybrid Growth (Tetration‑like bump)
+
+| Name                 |  Type | Default | Effect                                                              |
+| -------------------- | ----: | ------: | ------------------------------------------------------------------- |
+| `TETRA_ENABLED`      |  bool | `False` | Master switch.                                                      |
+| `TETRA_MODE`         |  enum | `"log"` | `"log"` (stable), `"direct"`, or `"series"`.                        |
+| `TETRA_HEIGHT`       |   int |     `3` | Iteration height; effective only for `"direct"` or as input to log. |
+| `TETRA_SERIES_TERMS` |   int |     `5` | Truncation length for `"series"`.                                   |
+| `TETRA_SCALE`        | float |  `0.02` | Bump amplitude as a fraction of data range.                         |
+| `TETRA_AXIS`         |  enum |   `"y"` | Whether to “bump” vertically (`"y"`) or horizontally (`"x"`).       |
 
 ---
 
@@ -2448,3 +2527,14 @@ plt.show()
 ![Untitled](https://github.com/user-attachments/assets/9536c52f-3879-444d-b528-ae0a6e551270)
 
 ---
+
+## Citing OBA
+```
+@software{benally_oba,
+  author  = {Benally, Onri Jay},
+  title   = {Onri's Bézier Approximation (OBA)},
+  year    = {2025},
+  url     = {https://github.com/OJB-Quantum/Onri-Bezier-Approximation},
+  note    = {Hybrid Bézier+tetration, curvature-aware anchor clustering, post-plot overlays}
+}
+```
