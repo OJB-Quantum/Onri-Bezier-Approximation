@@ -2,6 +2,17 @@
 Applied ideas on using Bezier curves &amp; hybrid tetrational-polynomials to fit or approximate curves in data of virtually any magnitude. Authored by Onri Jay Benally.
 
 [![License](https://img.shields.io/badge/GNU_General_Public-License-Green)](https://choosealicense.com/licenses/gpl-3.0)
+[![Colab Ready](https://img.shields.io/badge/Colab-ready-blue)](#quickstart-colab)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-informational)](#installation)
+
+**Primary repository:** `OJB-Quantum/Onri-Bezier-Approximation`
+**Repo URL:** [https://github.com/OJB-Quantum/Onri-Bezier-Approximation](https://github.com/OJB-Quantum/Onri-Bezier-Approximation)
+**Interactive demo:** [https://g.co/gemini/share/35aaa5180fc9](https://g.co/gemini/share/35aaa5180fc9)
+**Notebook viewer:** [https://nbviewer.org/github/OJB-Quantum/Bezier-Approximation-Plus/tree/main/](https://nbviewer.org/github/OJB-Quantum/Bezier-Approximation-Plus/tree/main/)
+
+---
+
+[![License](https://img.shields.io/badge/GNU_General_Public-License-Green)](https://choosealicense.com/licenses/gpl-3.0)
 
 Primary URL for the repository: [OJB-Quantum/Onri-Bezier-Approximation](https://github.com/OJB-Quantum/Onri-Bezier-Approximation)
 
