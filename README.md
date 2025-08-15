@@ -11,7 +11,7 @@ Basic Bezier curves, being the useful geometric tools that they are, can be desc
 
 Note that integrating a tetration into a polynomial can create extremely large values, which cannot be represented on any 64-bit or 128-bit computer. Thus, the tetration must be carefully expressed to stay within the compatibility or capability of a 128-bit or 64-bit machine. Some interesting results are provided in this repository applied to real use cases using adjustable clustering of Bezier anchor points, such as approximating electronic band structures for example. Check files for the code provided in a Google Colab notebook.
 
-### Click here to render the notebooks in the browser: [![nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.org/github/OJB-Quantum/Bezier-Approximation-Plus/tree/main/)
+### Click here to render the notebooks in the browser: [![nbviewer](https://raw.githubusercontent.com/jupyter/design/master/logos/Badges/nbviewer_badge.svg)](https://nbviewer.org/github/OJB-Quantum/Onri-Bezier-Approximation/tree/main/)
 
 ![ezgif-418d14bce1cd40](https://github.com/user-attachments/assets/dd806438-3021-4664-bea7-432d8a6186e3)
 
